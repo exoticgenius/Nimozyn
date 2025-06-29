@@ -42,3 +42,9 @@ public class TestRequest2 : INimRequest<string>
 {
     public string Val { get; set; }
 }
+
+[NimRequestLinker<TestRequest1>(ServiceLifetime.Scoped)]
+public class NimLogger1
+{
+
+}

@@ -2,8 +2,10 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 
 namespace Nimozyn;
 
@@ -12,12 +14,12 @@ public interface INimRootSupervisor : INimSupervisor;
 public interface INimScopeSupervisor : INimSupervisor;
 
 public interface INimHandler;
-public interface INimHandler<T> : INimHandler where T : INimRequest;
+public interface INimHandler<T> : INimHandler where T : INimInput;
 
 public interface INimBus;
 
-public interface INimRequest;
-public interface INimRequest<T> : INimRequest;
+public interface INimInput;
+public interface INimRequest<T> : INimInput;
 
 public static partial class NimDiscovery
 {
@@ -90,7 +92,7 @@ public static partial class NimDiscovery
 
     private static Type ExtractPureType(Type type)
     {
-        while (type.GetCustomAttribute<NimGeneratedClassAttribute>(). != null) type = type.BaseType;
+        while (type.GetCustomAttribute<NimGeneratedClassAttribute>() != null) type = type.BaseType;
         return type;
     }
 
@@ -154,8 +156,8 @@ public static partial class NimDiscovery
 
     private static void GenerateMethod(NimServiceDescriptor descriptor, MethodInfo methodinfo, TypeBuilder type, ServiceLifetime lifetime)
     {
-        var prms = new List<Type>();
-        prms.AddRange(methodinfo.GetParameters().Select(x => x.ParameterType).ToArray());
+        var parameters = new List<Type>();
+        parameters.AddRange(methodinfo.GetParameters().Select(x => x.ParameterType).ToArray());
 
         var returnType = methodinfo.ReturnType;
 
@@ -167,15 +169,51 @@ public static partial class NimDiscovery
             methodinfo.GetParameters().Select(x => x.ParameterType).ToArray());
         var il = method.GetILGenerator();
 
-        
 
+        il.DeclareLocal(methodinfo.ReturnType); // 0
+        il.DeclareLocal(typeof(Exception)); //     1
 
+        if (!IsTask(returnType))
+        {
+            var exBlock = il.BeginExceptionBlock();
+        }
 
+        for (var i = 0; i < parameters.Count + 1; i++)
+            il.Emit(OpCodes.Ldarg, i);
+        il.Emit(OpCodes.Call, methodinfo);
 
+        if (!IsTask(returnType))
+        {
 
+        }
+        else if (typeof(Task<>).IsAssignableFrom(returnType))
+        {
+            Type[] genArg = [returnType.GenericTypeArguments[0]];
 
+            var suppressor = "SuppressTask";
 
+            il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == suppressor).MakeGenericMethod(genArg));
+        }
+        else if (typeof(ValueTask<>).IsAssignableFrom(returnType))
+        {
+            Type[] genArg = [returnType.GenericTypeArguments[0]];
 
+            var suppressor = "SuppressValueTask";
+
+            il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == "SuppressValueTask").MakeGenericMethod(genArg));
+        }
+        else if (typeof(Task).IsAssignableFrom(returnType))
+        {
+            var suppressor = "SuppressTaskVoid";
+
+            il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == suppressor).MakeGenericMethod([]));
+        }
+        else if (typeof(ValueTask).IsAssignableFrom(returnType))
+        {
+            var suppressor = "SuppressValueTaskVoid";
+
+            il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == "SuppressValueTask").MakeGenericMethod([]));
+        }
 
 
 
@@ -185,40 +223,131 @@ public static partial class NimDiscovery
 
 
     }
+
+    [MethodImpl(MethodImplOptions.Synchronized)]
+    private static bool IsTask(Type returnType) =>
+        typeof(Task).IsAssignableFrom(returnType) ||
+        typeof(Task<>).IsAssignableFrom(returnType) ||
+        typeof(ValueTask).IsAssignableFrom(returnType) ||
+        typeof(ValueTask<>).IsAssignableFrom(returnType);
+
+
+    [DebuggerStepThrough]
+    public static async Task SuppressTaskVoid<T>(Task input)
+    {
+        try
+        {
+            await input;
+        }
+        catch (Exception ex)
+        {
+            throw;
+        }
+    }
+
+    [DebuggerStepThrough]
+    public static async Task<T> SuppressTask<T>(Task<T> input)
+    {
+        try
+        {
+            return await input;
+        }
+        catch (Exception ex)
+        {
+            throw;
+        }
+    }
+
+    [DebuggerStepThrough]
+    public static async ValueTask SuppressValueTaskVoid<T>(ValueTask input)
+    {
+        try
+        {
+            await input;
+        }
+        catch (Exception ex)
+        {
+            throw;
+        }
+    }
+
+    [DebuggerStepThrough]
+    public static async ValueTask<T> SuppressValueTask<T>(ValueTask<T> input)
+    {
+        try
+        {
+            return await input;
+        }
+        catch (Exception ex)
+        {
+            throw;
+        }
+    }
+
 }
 
 public class NimServiceDescriptor
 {
-    public List<INimBlock> RequestFilterBlocks { get; set; }
+    public List<INimBlock> InputFilterBlocks { get; set; }
     public List<INimBlock> PreExecuteBlocks { get; set; }
     public List<INimBlock> PostExecuteBlocks { get; set; }
     public List<INimBlock> OnErrorBlocks { get; set; }
-    public List<INimBlock> ResultFilterBlocks { get; set; }
+    public List<INimBlock> OutputFilterBlocks { get; set; }
 }
 
-public interface INimBlock
+public interface INimBlock;
+public interface INimNeutralBlock : INimBlock
 {
     Task Execute();
 }
+public class NimBlockTest : INimNeutralBlock
+{
+    public Task Execute()
+    {
+        throw new NotImplementedException();
+    }
+}
 
-public interface INimTransparentBlock<T> : INimBlock where T : INimRequest
+
+
+public interface INimTransparentBlock : INimBlock;
+public interface INimTransparentBlock<T> : INimTransparentBlock where T : INimInput
 {
     Task Execute(T request);
 }
+public class NimTransparentBlockTest<T> : INimTransparentBlock<T> where T : INimInput
+{
+    public Task Execute(T request)
+    {
+        throw new NotImplementedException();
+    }
+}
 
-public interface INimTransformBlock<T, R> : INimTransparentBlock<T> where T : INimRequest where R: T
+
+
+public interface INimTransformBlock : INimBlock;
+public interface INimTransformBlock<T, R> : INimTransformBlock where T : INimInput where R : T
 {
     Task<R> Execute(T request);
 }
+public class NimTransformBlockTest<T, R> : INimTransformBlock<T, R> where T : INimInput where R : T
+{
+    public Task<R> Execute(T request)
+    {
+        throw new NotImplementedException();
+    }
+}
 
-public class NimLinkerRequestFilterAttribute<T>(ServiceLifetime targetLifeTime) : Attribute where T: INimBlock
+
+
+public class NimRequestLinkerAttribute<T>(ServiceLifetime targetLifeTime) : Attribute where T : INimInput
 {
     public Type BlockType => typeof(T);
 }
 
-public class NimTransparentLinkerRequestFilterAttribute<T>(ServiceLifetime targetLifeTime) : NimLinkerRequestFilterAttribute<T>(targetLifeTime) where T : INimTransparentBlock
+public class NimAspectLinkerAttribute<T>(ServiceLifetime targetLifeTime) : Attribute where T : INimBlock
 {
-
+    public Type BlockType => typeof(T);
 }
 
 public class NimGeneratedClassAttribute : Attribute;
