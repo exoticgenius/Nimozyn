@@ -9,9 +9,42 @@ using System.Runtime.CompilerServices;
 
 namespace Nimozyn;
 
-public interface INimSupervisor;
+public interface INimSupervisor
+{
+    object GetService(Type serviceType);
+}
+
 public interface INimRootSupervisor : INimSupervisor;
+public class NimRootSupervisor : INimRootSupervisor
+{
+    private readonly IServiceProvider sp;
+
+    public NimRootSupervisor(IServiceProvider sp)
+    {
+        this.sp = sp;
+    }
+
+    public object GetService(Type serviceType)
+    {
+        return sp.GetService(serviceType);
+    }
+}
+
 public interface INimScopeSupervisor : INimSupervisor;
+public class NimScopeSupervisor : INimScopeSupervisor
+{
+    private readonly IServiceProvider sp;
+
+    public NimScopeSupervisor(IServiceProvider sp)
+    {
+        this.sp = sp;
+    }
+
+    public object GetService(Type serviceType)
+    {
+        return sp.GetService(serviceType);
+    }
+}
 
 public interface INimHandler;
 public interface INimHandler<T> : INimHandler where T : INimInput;
@@ -25,6 +58,9 @@ public static partial class NimDiscovery
 {
     public static IServiceCollection ScanNimHandlersAsync(this IServiceCollection collection)
     {
+        collection.TryAddSingleton<INimRootSupervisor, NimRootSupervisor>();
+        collection.TryAddScoped<INimScopeSupervisor, NimScopeSupervisor>();
+
         foreach (ServiceDescriptor? service in collection.ToList())
         {
             if (service.ImplementationType is null)
@@ -71,85 +107,120 @@ public static partial class NimDiscovery
             return null;
 
         var pure = ExtractPureType(type);
+        var baseMatrix = GenerateBaseMatrix(type);
+
         var moduleBuilder = GenerateModuleBuilder(pure, type);
         var typeBuilder = GenerateType(type, moduleBuilder);
         GenerateConstructors(type, lifetime, typeBuilder);
 
         foreach (var item in type.GetRuntimeMethods())
-            DescribeMethod(item, typeBuilder, lifetime);
+            DescribeMethod(item, typeBuilder, lifetime, baseMatrix);
 
         return typeBuilder.CreateType()!;
     }
 
-    private static void DescribeMethod(MethodInfo item, TypeBuilder typeBuilder, ServiceLifetime lifetime)
+    private static BaseMatrix GenerateBaseMatrix(Type type)
     {
-        var descriptor = new NimServiceDescriptor { };
+        var asmAttrs = type.Assembly.GetCustomAttributes(true);
+        var typeAttrs = type.GetCustomAttributes(true);
+        var bm = new BaseMatrix();
 
-        // input filter,
-        // pre
-        // on error
-        // post
-        // output filter
-        var aspect_matrix = new
+
+        bm.AssemblyMatrix = new AspectMatrix
         {
-            asm_matrix = new
-            {
-                asm_input_filter = item.DeclaringType.Assembly.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Pre && ana.BlockType is INimTransparentBlock).Select(x => x as ANimAspect).ToList(),
+            InputFilter = asmAttrs
+                .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Pre or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimTransparentBlock))).Select(x => (ANimAspect)x).ToList(),
 
-                asm_pre = item.DeclaringType.Assembly.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Pre && ana.BlockType is INimBlock).Select(x => x as ANimAspect).ToList(),
+            Pre = asmAttrs
+                .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Pre or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimNeutralBlock))).Select(x => (ANimAspect)x).ToList(),
 
-                asm_on_error = item.DeclaringType.Assembly.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.BlockType is INimErrorBlock).Select(x => x as ANimAspect).ToList(),
+            OnError = asmAttrs
+                .Where(x => x is ANimAspect na && na.BlockType is INimErrorBlock).Select(x => (ANimAspect)x).ToList(),
 
-                asm_post = item.DeclaringType.Assembly.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Post && ana.BlockType is INimBlock).Select(x => x as ANimAspect).ToList(),
+            Post = asmAttrs
+                .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Post or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimNeutralBlock))).Select(x => (ANimAspect)x).ToList(),
 
-                asm_output_filter = item.DeclaringType.Assembly.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Post && ana.BlockType is INimTransparentBlock).Select(x => x as ANimAspect).ToList()
-            },
+            OutputFilter = asmAttrs
+                .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Post or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimTransparentBlock))).Select(x => (ANimAspect)x).ToList()
+        };
 
-            type_matrix = new
-            {
-                asm_input_filter = item.DeclaringType.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Pre && ana.BlockType is INimTransparentBlock).Select(x => x as ANimAspect).ToList(),
+        bm.TypeMatrix = new AspectMatrix
+        {
+            InputFilter = typeAttrs
+                 .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Pre or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimTransparentBlock))).Select(x => (ANimAspect)x).ToList(),
 
-                asm_pre = item.DeclaringType.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Pre && ana.BlockType is INimBlock).Select(x => x as ANimAspect).ToList(),
+            Pre = typeAttrs
+                 .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Pre or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimNeutralBlock))).Select(x => (ANimAspect)x).ToList(),
 
-                asm_on_error = item.DeclaringType.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.BlockType is INimErrorBlock).Select(x => x as ANimAspect).ToList(),
+            OnError = typeAttrs
+                 .Where(x => x is ANimAspect na && na.BlockType is INimErrorBlock).Select(x => (ANimAspect)x).ToList(),
 
-                asm_post = item.DeclaringType.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Post && ana.BlockType is INimBlock).Select(x => x as ANimAspect).ToList(),
+            Post = typeAttrs
+                 .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Post or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimNeutralBlock))).Select(x => (ANimAspect)x).ToList(),
 
-                asm_output_filter = item.DeclaringType.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Post && ana.BlockType is INimTransparentBlock).Select(x => x as ANimAspect).ToList()
-            },
-
-            method_matrix = new
-            {
-                asm_input_filter = item.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Pre && ana.BlockType is INimTransparentBlock).Select(x => x as ANimAspect).ToList(),
-
-                asm_pre = item.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Pre && ana.BlockType is INimBlock).Select(x => x as ANimAspect).ToList(),
-
-                asm_on_error = item.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.BlockType is INimErrorBlock).Select(x => x as ANimAspect).ToList(),
-
-                asm_post = item.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Post && ana.BlockType is INimBlock).Select(x => x as ANimAspect).ToList(),
-
-                asm_output_filter = item.GetCustomAttributes()
-                    .Where(x => x is ANimAspect ana && ana.AspectPosition is AspectPosition.Post && ana.BlockType is INimTransparentBlock).Select(x => x as ANimAspect).ToList()
-            },
+            OutputFilter = typeAttrs
+                 .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Post or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimTransparentBlock))).Select(x => (ANimAspect)x).ToList()
         };
 
 
+        return bm;
+    }
+    internal class BaseMatrix
+    {
+        public AspectMatrix AssemblyMatrix { get; set; }
+        public AspectMatrix TypeMatrix { get; set; }
+    }
+    internal class AspectMatrix
+    {
+        public List<ANimAspect> InputFilter { get; set; }
+        public List<ANimAspect> Pre { get; set; }
+        public List<ANimAspect> OnError { get; set; }
+        public List<ANimAspect> Post { get; set; }
+        public List<ANimAspect> OutputFilter { get; set; }
+    }
 
-        GenerateMethod(descriptor, item, typeBuilder, lifetime);
+    private static void DescribeMethod(MethodInfo targetMethod, TypeBuilder typeBuilder, ServiceLifetime lifetime, BaseMatrix baseMatrix)
+    {
+        var descriptor = new NimServiceDescriptor { };
+        var methodAttrs = targetMethod.GetCustomAttributes(true);
+
+        var methodMatrix = new AspectMatrix
+        {
+            InputFilter = methodAttrs
+                    .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Pre or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimTransparentBlock))).Select(x => (ANimAspect)x).ToList(),
+
+            Pre = methodAttrs
+                    .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Pre or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimNeutralBlock))).Select(x => (ANimAspect)x).ToList(),
+
+            OnError = methodAttrs
+                    .Where(x => x is ANimAspect na && na.BlockType is INimErrorBlock).Select(x => (ANimAspect)x).ToList(),
+
+            Post = methodAttrs
+                    .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Post or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimNeutralBlock))).Select(x => (ANimAspect)x).ToList(),
+
+            OutputFilter = methodAttrs
+                    .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Post or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimTransparentBlock))).Select(x => (ANimAspect)x).ToList()
+        };
+
+        methodMatrix.Pre.AddRange(baseMatrix.AssemblyMatrix.Pre);
+        methodMatrix.Pre.AddRange(baseMatrix.TypeMatrix.Pre);
+
+        methodMatrix.OnError.AddRange(baseMatrix.TypeMatrix.OnError);
+
+        methodMatrix.Post.AddRange(baseMatrix.AssemblyMatrix.Post);
+        methodMatrix.Post.AddRange(baseMatrix.TypeMatrix.Post);
+
+        methodMatrix.OutputFilter.AddRange(baseMatrix.AssemblyMatrix.OutputFilter
+            .Where(x => x.BlockType.GetInterfaces().First(x => x.IsGenericType).GenericTypeArguments[0] == targetMethod.ReturnType));
+        methodMatrix.OutputFilter.AddRange(baseMatrix.TypeMatrix.OutputFilter
+            .Where(x => x.BlockType.GetInterfaces().First(x => x.IsGenericType).GenericTypeArguments[0] == targetMethod.ReturnType));
+
+        methodMatrix.InputFilter.AddRange(baseMatrix.AssemblyMatrix.InputFilter
+            .Where(x => targetMethod.GetParameters().Any(z => z.ParameterType == x.BlockType.GenericTypeArguments[0])));
+
+
+
+        GenerateMethod(descriptor, targetMethod, typeBuilder, lifetime, methodMatrix);
     }
 
     private static Type ExtractPureType(Type type)
@@ -192,7 +263,6 @@ public static partial class NimDiscovery
         foreach (var item in type.GetConstructors())
             GenerateConstructor(typeBuilder, item, alreadyIsNim, lifetime);
     }
-
     private static void GenerateConstructor(TypeBuilder type, ConstructorInfo constructor, bool alreadyIsNim, ServiceLifetime lifetime)
     {
         var prms = new List<Type>();
@@ -216,7 +286,7 @@ public static partial class NimDiscovery
         il.Emit(OpCodes.Ret);
     }
 
-    private static void GenerateMethod(NimServiceDescriptor descriptor, MethodInfo methodinfo, TypeBuilder type, ServiceLifetime lifetime)
+    private static void GenerateMethod(NimServiceDescriptor descriptor, MethodInfo methodinfo, TypeBuilder type, ServiceLifetime lifetime, AspectMatrix methodMatrix)
     {
         var parameters = new List<Type>();
         parameters.AddRange(methodinfo.GetParameters().Select(x => x.ParameterType).ToArray());
@@ -231,12 +301,22 @@ public static partial class NimDiscovery
             methodinfo.GetParameters().Select(x => x.ParameterType).ToArray());
         var il = method.GetILGenerator();
 
-
-        il.DeclareLocal(methodinfo.ReturnType); // 0
-        il.DeclareLocal(typeof(Exception)); //     1
+        il.Emit(OpCodes.Ldarg_S, 1);
+        foreach (var pre in methodMatrix.Pre)
+        {
+            il.Emit(OpCodes.Ldfld, type.GetFields().First(x => x.Name == SUPERVISOR_FIELD_NAME));
+            il.Emit(OpCodes.Ldtoken, pre.BlockType);
+            il.Emit(OpCodes.Callvirt, typeof(INimSupervisor).GetMethods().First(x => x.Name == "GetService"));
+            il.Emit(OpCodes.Callvirt, typeof(INimNeutralBlock).GetMethods().First(x => x.Name == "Execute"));
+            il.Emit(OpCodes.Starg_S, 1);
+            il.Emit(OpCodes.Ldarg_S, 1);
+        }
 
         if (IsTask(returnType))
             return;
+
+        il.DeclareLocal(methodinfo.ReturnType); // 0
+        il.DeclareLocal(typeof(Exception)); //     1
 
 
 
@@ -295,7 +375,7 @@ public static partial class NimDiscovery
 
 
     [DebuggerStepThrough]
-    public static async Task SuppressTaskVoid<T>(Task input)
+    public static async Task SuppressTaskVoid(Task input)
     {
         try
         {
@@ -321,7 +401,7 @@ public static partial class NimDiscovery
     }
 
     [DebuggerStepThrough]
-    public static async ValueTask SuppressValueTaskVoid<T>(ValueTask input)
+    public static async ValueTask SuppressValueTaskVoid(ValueTask input)
     {
         try
         {
@@ -370,25 +450,24 @@ public class NimBlockTest : INimNeutralBlock
 }
 
 
-public interface INimErrorBlock : INimBlock;
-public interface INimErrorBlock<T> : INimErrorBlock where T : INimInput
+public interface INimErrorBlock : INimBlock
 {
-    Task<T> Execute(T request, Exception e);
+    Task Execute(Exception e, object[] @params);
 }
-public class NimErrorBlockTest<T> : INimErrorBlock<T> where T : INimInput
+public class NimErrorBlockTest : INimErrorBlock
 {
-    public Task<T> Execute(T request, Exception e)
+    public Task Execute(Exception e, object[] @params)
     {
         throw new NotImplementedException();
     }
 }
 
 public interface INimTransparentBlock : INimBlock;
-public interface INimTransparentBlock<T> : INimTransparentBlock where T : INimInput
+public interface INimTransparentBlock<T> : INimTransparentBlock
 {
     Task<T> Execute(T request);
 }
-public class NimTransparentBlockTest<T> : INimTransparentBlock<T> where T : INimInput
+public class NimTransparentBlockTest<T> : INimTransparentBlock<T>
 {
     public Task<T> Execute(T request)
     {
@@ -411,6 +490,7 @@ public abstract class ANimAspect : Attribute, INimAspect
     }
 }
 
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
 public class NimRequestLinkerAttribute<T> : ANimAspect where T : INimInput
 {
     public NimRequestLinkerAttribute(ServiceLifetime targetLifeTime, AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), targetLifeTime, position)
@@ -418,6 +498,7 @@ public class NimRequestLinkerAttribute<T> : ANimAspect where T : INimInput
     }
 }
 
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
 public class NimAspectLinkerAttribute<T> : ANimAspect where T : INimBlock
 {
     public NimAspectLinkerAttribute(ServiceLifetime targetLifeTime, AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), targetLifeTime, position)
@@ -432,4 +513,5 @@ public enum AspectPosition
     NotSpecified,
     Pre,
     Post,
+    Wrap,
 }

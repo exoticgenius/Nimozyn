@@ -2,7 +2,8 @@
 
 using Nimozyn;
 
-[assembly: NimAspectLinker<NimLogger1>(ServiceLifetime.Scoped)]
+[assembly: NimAspectLinker<NimLogger1>(ServiceLifetime.Scoped, AspectPosition.Wrap)]
+[assembly: NimAspectLinker<OutputFilter>(ServiceLifetime.Transient, AspectPosition.Post)]
 
 var col = new ServiceCollection();
 
@@ -10,7 +11,7 @@ col.AddTransient<ITestService, TestService>();
 
 col.ScanNimHandlersAsync();
 
-var provider = col.BuildServiceProvider();
+IServiceProvider provider = col.BuildServiceProvider();
 
 Console.ReadLine();
 
@@ -21,6 +22,7 @@ public interface ITestService : INimHandler
     string TestMethod2(TestRequest2 req);
 }
 
+[NimAspectLinker<OutputFilter>(ServiceLifetime.Transient, AspectPosition.Post)]
 [NimAspectLinker<NimLogger1>(ServiceLifetime.Scoped, AspectPosition.Pre)]
 public class TestService : ITestService
 {
@@ -29,6 +31,8 @@ public class TestService : ITestService
         return req.Val;
     }
 
+    [NimAspectLinker<OutputFilter>(ServiceLifetime.Transient, AspectPosition.Post)]
+    [NimAspectLinker<NimLogger1>(ServiceLifetime.Scoped, AspectPosition.Post)]
     public string TestMethod2(TestRequest2 req)
     {
         return req.Val;
@@ -45,11 +49,19 @@ public class TestRequest2 : INimRequest<string>
     public string Val { get; set; }
 }
 
-[NimRequestLinker<TestRequest1>(ServiceLifetime.Scoped)]
+[NimRequestLinker<TestRequest1>(ServiceLifetime.Scoped, AspectPosition.Wrap)]
 public class NimLogger1 : INimNeutralBlock
 {
     public Task Execute()
     {
         throw new NotImplementedException();
+    }
+}
+
+public class OutputFilter : INimTransparentBlock<int>
+{
+    public Task<int> Execute(int request)
+    {
+        return Task.FromResult(request + 1);
     }
 }
