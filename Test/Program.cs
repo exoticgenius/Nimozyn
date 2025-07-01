@@ -2,8 +2,8 @@
 
 using Nimozyn;
 
-[assembly: NimAspectLinker<NimLogger1>(ServiceLifetime.Scoped, AspectPosition.Wrap)]
-[assembly: NimAspectLinker<OutputFilter>(ServiceLifetime.Transient, AspectPosition.Post)]
+[assembly: NimAspectLinker<NimLogger1>(AspectPosition.Wrap)]
+[assembly: NimAspectLinker<OutputFilter>(AspectPosition.Post)]
 
 var col = new ServiceCollection();
 
@@ -18,38 +18,38 @@ Console.ReadLine();
 
 public interface ITestService : INimHandler
 {
-    int TestMethod1(TestRequest1 req);
-    string TestMethod2(TestRequest2 req);
+    int TestMethod1(TestInput1 req);
+    string TestMethod2(TestInput2 req);
 }
 
-[NimAspectLinker<OutputFilter>(ServiceLifetime.Transient, AspectPosition.Post)]
-[NimAspectLinker<NimLogger1>(ServiceLifetime.Scoped, AspectPosition.Pre)]
+[NimAspectLinker<OutputFilter>(AspectPosition.Post)]
+[NimAspectLinker<NimLogger1>(AspectPosition.Pre)]
 public class TestService : ITestService
 {
-    public int TestMethod1(TestRequest1 req)
+    public int TestMethod1(TestInput1 req)
     {
         return req.Val;
     }
 
-    [NimAspectLinker<OutputFilter>(ServiceLifetime.Transient, AspectPosition.Post)]
-    [NimAspectLinker<NimLogger1>(ServiceLifetime.Scoped, AspectPosition.Post)]
-    public string TestMethod2(TestRequest2 req)
+    [NimAspectLinker<OutputFilter>(AspectPosition.Post)]
+    [NimAspectLinker<NimLogger1>(AspectPosition.Post)]
+    public string TestMethod2(TestInput2 req)
     {
         return req.Val;
     }
 }
 
-public class TestRequest1 : INimRequest<int>
+public class TestInput1 : INimInput<int>
 {
     public int Val { get; set; }
 }
 
-public class TestRequest2 : INimRequest<string>
+public class TestInput2 : INimInput<string>
 {
     public string Val { get; set; }
 }
 
-[NimRequestLinker<TestRequest1>(ServiceLifetime.Scoped, AspectPosition.Wrap)]
+[NimInputLinker<TestInput1>(AspectPosition.Wrap)]
 public class NimLogger1 : INimNeutralBlock
 {
     public Task Execute()
@@ -60,8 +60,8 @@ public class NimLogger1 : INimNeutralBlock
 
 public class OutputFilter : INimTransparentBlock<int>
 {
-    public Task<int> Execute(int request)
+    public Task<int> Execute(int Input)
     {
-        return Task.FromResult(request + 1);
+        return Task.FromResult(Input + 1);
     }
 }

@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -40,7 +41,7 @@ public class NimScopeSupervisor : INimScopeSupervisor
         this.sp = sp;
     }
 
-    public object GetService(Type serviceType)
+    public object? GetService(Type serviceType)
     {
         return sp.GetService(serviceType);
     }
@@ -49,10 +50,15 @@ public class NimScopeSupervisor : INimScopeSupervisor
 public interface INimHandler;
 public interface INimHandler<T> : INimHandler where T : INimInput;
 
+
+public class NimTransient : Attribute;
+public class NimScoped : Attribute;
+public class NimSingleton : Attribute;
+
 public interface INimBus;
 
 public interface INimInput;
-public interface INimRequest<T> : INimInput;
+public interface INimInput<T> : INimInput;
 
 public static partial class NimDiscovery
 {
@@ -61,25 +67,71 @@ public static partial class NimDiscovery
         collection.TryAddSingleton<INimRootSupervisor, NimRootSupervisor>();
         collection.TryAddScoped<INimScopeSupervisor, NimScopeSupervisor>();
 
-        foreach (ServiceDescriptor? service in collection.ToList())
-        {
-            if (service.ImplementationType is null)
-                continue;
+        //foreach (ServiceDescriptor? service in collection.ToList())
+        //{
+        //    if (service.ImplementationType is null)
+        //        continue;
 
-            Type? extended = Extend(service.ImplementationType, service.Lifetime);
+        //    //Type? extended = Extend(service.ImplementationType, service.Lifetime);
 
-            if (extended is null) continue;
+        //    //if (extended is null) continue;
 
-            collection.Remove(service);
+        //    collection.Remove(service);
 
-            collection.Add(ServiceDescriptor.Describe(
-                service.ServiceType,
-                extended,
-                service.Lifetime));
-        }
+        //    collection.Add(ServiceDescriptor.Describe(
+        //        service.ServiceType,
+        //        service.ImplementationType,
+        //        service.Lifetime));
+        //}
+
+        var hType = typeof(INimHandler);
+        var allHandlers = AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(x => x.GetTypes())
+            .Where(x => x.IsAssignableTo(hType))
+            .SelectMany(x=> ExpandByMethods(x))
+            .ToImmutableList();
+
+
 
         return collection;
     }
+    
+    public class ExpandedHandler
+    {
+        public Type InputType { get; set; }
+        public Type ServiceType { get; set; }
+        public MethodInfo handlerMethod { get; set; }
+        public ServiceLifetime LifeTime { get; set; }
+    }
+
+    private static IEnumerable<ExpandedHandler> ExpandByMethods(Type type)
+    {
+        var iType = typeof(INimInput);
+        var methods = type.GetMethods()
+            .Where(x=>x.GetParameters().First().ParameterType.IsAssignableTo(iType));
+
+        return methods.Select(x => new ExpandedHandler
+        {
+            handlerMethod = x,
+            InputType = x.GetParameters()[0].ParameterType,
+            ServiceType = type,
+            LifeTime
+        });
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
 public static partial class NimDiscovery
 {
@@ -465,11 +517,11 @@ public class NimErrorBlockTest : INimErrorBlock
 public interface INimTransparentBlock : INimBlock;
 public interface INimTransparentBlock<T> : INimTransparentBlock
 {
-    Task<T> Execute(T request);
+    Task<T> Execute(T input);
 }
 public class NimTransparentBlockTest<T> : INimTransparentBlock<T>
 {
-    public Task<T> Execute(T request)
+    public Task<T> Execute(T input)
     {
         throw new NotImplementedException();
     }
@@ -479,21 +531,19 @@ public interface INimAspect;
 public abstract class ANimAspect : Attribute, INimAspect
 {
     public Type BlockType { get; private init; }
-    public ServiceLifetime TargetLifeTime { get; private init; }
     public AspectPosition AspectPosition { get; private init; }
 
-    protected ANimAspect(Type blockType, ServiceLifetime targetLifeTime, AspectPosition position = AspectPosition.NotSpecified)
+    protected ANimAspect(Type blockType, AspectPosition position = AspectPosition.NotSpecified)
     {
         BlockType = blockType;
-        TargetLifeTime = targetLifeTime;
         AspectPosition = position;
     }
 }
 
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
-public class NimRequestLinkerAttribute<T> : ANimAspect where T : INimInput
+public class NimInputLinkerAttribute<T> : ANimAspect where T : INimInput
 {
-    public NimRequestLinkerAttribute(ServiceLifetime targetLifeTime, AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), targetLifeTime, position)
+    public NimInputLinkerAttribute(AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), position)
     {
     }
 }
@@ -501,7 +551,7 @@ public class NimRequestLinkerAttribute<T> : ANimAspect where T : INimInput
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
 public class NimAspectLinkerAttribute<T> : ANimAspect where T : INimBlock
 {
-    public NimAspectLinkerAttribute(ServiceLifetime targetLifeTime, AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), targetLifeTime, position)
+    public NimAspectLinkerAttribute(AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), position)
     {
     }
 }
