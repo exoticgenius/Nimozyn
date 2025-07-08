@@ -50,10 +50,51 @@ public class NimScopeSupervisor : INimScopeSupervisor
 public interface INimHandler;
 public interface INimHandler<T> : INimHandler where T : INimInput;
 
+public enum NimCompatibilityMode
+{
+    Enforce,
+    Ignore,
+    Abort,
+}
 
-public class NimTransient : Attribute;
-public class NimScoped : Attribute;
-public class NimSingleton : Attribute;
+public enum NimLifetime
+{
+    Singleton,
+    Scoped,
+    Transient,
+}
+
+public class NimLifetimeAttribute : Attribute
+{
+    public NimLifetime Lifetime { get; init; }
+    public NimCompatibilityMode CompatibilityMode { get; init; }
+    public NimLifetimeAttribute(NimLifetime lifetime, NimCompatibilityMode compatibilityMode)
+    {
+        Lifetime = lifetime;
+        CompatibilityMode = compatibilityMode;
+    }
+}
+
+public class NimTransientAttribute : NimLifetimeAttribute
+{
+    public NimTransientAttribute(NimCompatibilityMode compatibilityMode = NimCompatibilityMode.Enforce) :
+        base(NimLifetime.Transient, compatibilityMode)
+    { }
+}
+
+public class NimScopedAttribute : NimLifetimeAttribute
+{
+    public NimScopedAttribute(NimCompatibilityMode compatibilityMode = NimCompatibilityMode.Enforce) :
+        base(NimLifetime.Scoped, compatibilityMode)
+    { }
+}
+
+public class NimSingletonAttribute : NimLifetimeAttribute
+{
+    public NimSingletonAttribute(NimCompatibilityMode compatibilityMode = NimCompatibilityMode.Enforce) :
+        base(NimLifetime.Singleton, compatibilityMode)
+    { }
+}
 
 public interface INimBus;
 
@@ -88,36 +129,88 @@ public static partial class NimDiscovery
         var allHandlers = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(x => x.GetTypes())
             .Where(x => x.IsAssignableTo(hType))
-            .SelectMany(x=> ExpandByMethods(x))
+            .Select(ExpandByMethods)
             .ToImmutableList();
 
 
 
         return collection;
     }
-    
-    public class ExpandedHandler
+
+    internal class ExpandedHandler
     {
-        public Type InputType { get; set; }
-        public Type ServiceType { get; set; }
-        public MethodInfo handlerMethod { get; set; }
-        public ServiceLifetime LifeTime { get; set; }
+        public required Type ServiceType { get; init; }
+        public required ImmutableList<ExpandedHandlerMethod> Methods { get; init; }
+        public required BaseMatrix BaseMatrix { get; init; }
     }
 
-    private static IEnumerable<ExpandedHandler> ExpandByMethods(Type type)
+    public class ExpandedHandlerMethod
+    {
+        public required Type InputType { get; set; }
+        public required MethodInfo handlerMethod { get; set; }
+        public NimLifetime Lifetime { get; set; }
+
+        public NimCompatibilityMode CompatibilityMode { get; set; }
+    }
+
+    private static ExpandedHandler ExpandByMethods(Type type)
     {
         var iType = typeof(INimInput);
-        var methods = type.GetMethods()
-            .Where(x=>x.GetParameters().First().ParameterType.IsAssignableTo(iType));
+        var defaultlifetimeAttrs = GetTypeLifetimeAttrs(type);
 
-        return methods.Select(x => new ExpandedHandler
+        var defaultlifetime = NimLifetime.Scoped;
+        var defaultCompMode = NimCompatibilityMode.Enforce;
+
+        if (defaultlifetimeAttrs.Length > 0)
+            defaultlifetime = defaultlifetimeAttrs[0].Lifetime;
+        if (defaultlifetimeAttrs.Length > 0)
+            defaultCompMode = defaultlifetimeAttrs[0].CompatibilityMode;
+
+        var handlers = type
+            .GetMethods()
+            .Where(x => x.GetParameters().First().ParameterType.IsAssignableTo(iType))
+            .Select(method =>
+            {
+                var methodLifeTimes = GetMethodLifetimeAttrs(method);
+
+                return new ExpandedHandlerMethod
+                {
+                    handlerMethod = method,
+                    InputType = method.GetParameters()[0].ParameterType,
+                    Lifetime = GetLifetime(methodLifeTimes, defaultlifetime),
+                    CompatibilityMode = GetCompatibilityMode(methodLifeTimes, defaultCompMode)
+                };
+            })
+            .ToImmutableList();
+
+        return new ExpandedHandler
         {
-            handlerMethod = x,
-            InputType = x.GetParameters()[0].ParameterType,
             ServiceType = type,
-            LifeTime
-        });
+            Methods = handlers,
+            BaseMatrix = GenerateBaseMatrix(type),
+        };
+
+        static NimLifetime GetLifetime(NimLifetimeAttribute[] attrs, NimLifetime defaultLifetime) =>
+            attrs.Length > 0 ?
+            attrs[0].Lifetime :
+            defaultLifetime;
+
+        static NimCompatibilityMode GetCompatibilityMode(NimLifetimeAttribute[] attrs, NimCompatibilityMode defaultCompMode) =>
+            attrs.Length > 0 ?
+            attrs[0].CompatibilityMode :
+            defaultCompMode;
+
+        static NimLifetimeAttribute[] GetMethodLifetimeAttrs(MethodInfo method) => method
+            .GetCustomAttributes(typeof(NimLifetimeAttribute), true)
+            .Select(x => (NimLifetimeAttribute)x)
+            .ToArray();
+
+        static NimLifetimeAttribute[] GetTypeLifetimeAttrs(Type type) => type
+            .GetCustomAttributes(typeof(NimLifetimeAttribute), true)
+            .Select(x => (NimLifetimeAttribute)x)
+            .ToArray();
     }
+
 
 
 
