@@ -8,7 +8,6 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 
-using static Nimozyn.NimDiscovery;
 
 namespace Nimozyn;
 
@@ -16,27 +15,22 @@ namespace Nimozyn;
 
 public static partial class NimDiscovery
 {
+    private static ConcurrentDictionary<Assembly, ModuleBuilder> ModuleBuilders;
+
+    private const string ASSIMBLY_PREFIX = "Runtime_Nim_Assembly_";
+    private const string TYPE_PREFIX = "Runtime_Nim_Type_";
+    private const string SUPERVISOR_FIELD_NAME = "Runtime_Nim_Supervisor_Field";
+    private static readonly Type SUPERVISOR_TYPE = typeof(INimSupervisor);
+
+    static NimDiscovery()
+    {
+        ModuleBuilders = new();
+    }
+
     public static IServiceCollection ScanNimHandlersAsync(this IServiceCollection collection)
     {
         collection.TryAddSingleton<INimRootSupervisor, NimRootSupervisor>();
         collection.TryAddScoped<INimScopeSupervisor, NimScopeSupervisor>();
-
-        //foreach (ServiceDescriptor? service in collection.ToList())
-        //{
-        //    if (service.ImplementationType is null)
-        //        continue;
-
-        //    //Type? extended = Extend(service.ImplementationType, service.Lifetime);
-
-        //    //if (extended is null) continue;
-
-        //    collection.Remove(service);
-
-        //    collection.Add(ServiceDescriptor.Describe(
-        //        service.ServiceType,
-        //        service.ImplementationType,
-        //        service.Lifetime));
-        //}
 
         if (collection.Any(x => x.ImplementationType?.IsAssignableTo(typeof(INimHandler)) == true))
             throw new InvalidProgramException("handlers must not be registered as services before scan");
@@ -60,7 +54,6 @@ public static partial class NimDiscovery
         collection.AddSingleton(manager);
         collection.AddTransient<INimBus, NimBus>();
 
-
         return collection;
     }
 
@@ -71,7 +64,6 @@ public static partial class NimDiscovery
         NimLifetime.Transient => ServiceLifetime.Transient,
         _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "Invalid ServiceLifetime")
     };
-
 
     private static ExpandedHandler ExpandByMethods(Type type)
     {
@@ -134,32 +126,6 @@ public static partial class NimDiscovery
             .ToArray();
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    private static ConcurrentDictionary<Assembly, ModuleBuilder> ModuleBuilders;
-
-    private const string ASSIMBLY_PREFIX = "Runtime_Nim_Assembly_";
-    private const string TYPE_PREFIX = "Runtime_Nim_Type_";
-    private const string SUPERVISOR_FIELD_NAME = "Runtime_Nim_Supervisor_Field";
-    private static readonly Type SUPERVISOR_TYPE = typeof(INimSupervisor);
-
-    static NimDiscovery()
-    {
-        ModuleBuilders = new();
-    }
-
     private static Type SelectSupervisor(ServiceLifetime lifetime) => lifetime switch
     {
         ServiceLifetime.Scoped => typeof(INimScopeSupervisor),
@@ -182,6 +148,35 @@ public static partial class NimDiscovery
             DescribeMethod(item, typeBuilder, lifetime, baseMatrix);
 
         return typeBuilder.CreateType()!;
+    }
+
+    public interface ILLauncher
+    {
+        public object Execute(object target, MethodInfo methodinfo, object input);
+    }
+
+    public static Type GenerateLauncher()
+    {
+        var moduleBuilder = GenerateModuleBuilder(typeof(ILLauncher), typeof(ILLauncher));
+        var typeBuilder = GenerateType(typeof(ILLauncher), moduleBuilder);
+
+        Type[] parameters = [typeof(object), typeof(object), typeof(MethodInfo)];
+
+        var returnType = typeof(object);
+
+        var method = typeBuilder.DefineMethod(
+            "ILLauncher",
+            MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.Virtual | MethodAttributes.NewSlot,
+            CallingConventions.Standard | CallingConventions.HasThis,
+            returnType,
+            parameters);
+        var il = method.GetILGenerator();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.stele); // this is method info
+        il.Emit(OpCodes.Call,);
+
     }
 
     private static BaseMatrix GenerateBaseMatrix(Type type)
@@ -230,11 +225,13 @@ public static partial class NimDiscovery
 
         return bm;
     }
+
     internal class BaseMatrix
     {
         public AspectMatrix AssemblyMatrix { get; set; }
         public AspectMatrix TypeMatrix { get; set; }
     }
+
     internal class AspectMatrix
     {
         public List<ANimAspect> InputFilter { get; set; }

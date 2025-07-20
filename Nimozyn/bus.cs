@@ -6,9 +6,9 @@ namespace Nimozyn;
 
 public interface INimBus
 {
-    Task Run(INimInput input);
-    Task<T> Run<T>(INimInput input);
-    Task<T> Run<T>(INimInput<T> input);
+    void Run(INimInput input);
+    T Run<T>(INimInput input);
+    T Run<T>(INimInput<T> input);
 }
 
 internal sealed class NimBus : INimBus
@@ -23,10 +23,8 @@ internal sealed class NimBus : INimBus
     }
 
     [DebuggerStepThrough]
-    public async Task Run(INimInput input)
+    public void Run(INimInput input)
     {
-        await Task.Yield();
-
         var handler = manager.GetHandlerMethod(input.GetType());
 
         if (handler is null)
@@ -38,13 +36,8 @@ internal sealed class NimBus : INimBus
     }
 
     [DebuggerStepThrough]
-    public async Task<T> Run<T>(INimInput<T> input) => await Run<T>(input as INimInput);
-
-    [DebuggerStepThrough]
-    public async Task<T> Run<T>(INimInput input)
+    public T? Run<T>(INimInput input)
     {
-        await Task.Yield();
-
         var handler = manager.GetHandlerMethod(input.GetType());
 
         if (handler is null)
@@ -57,9 +50,24 @@ internal sealed class NimBus : INimBus
 
         var res = handler.handlerMethod.Invoke(service, [input]);
 
-        if (res is Task<T> task)
-            return await task;
+        return (T)res;
+    }
 
-        return (T)res!;
+    [DebuggerStepThrough]
+    public T? Run<T>(INimInput<T> input)
+    {
+        var handler = manager.GetHandlerMethod(input.GetType());
+
+        if (handler is null)
+            throw new InvalidOperationException($"No handler found for input type {input.GetType().Name}");
+
+        if (handler.handlerMethod.ReturnType != typeof(T) && handler.handlerMethod.ReturnType != typeof(Task<T>))
+            throw new InvalidOperationException($"Handler method {handler.handlerMethod.Name} does not return type {typeof(T).Name}");
+
+        var service = serviceProvider.GetRequiredService(handler?.HandlerWrapper?.ServiceType ?? throw new InvalidOperationException("No handler found for input type"));
+
+        var res = handler.handlerMethod.Invoke(service, [input]);
+
+        return (T)res;
     }
 }

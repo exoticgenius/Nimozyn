@@ -31,9 +31,15 @@ public interface ITestService : INimHandler
 [NimTransient]
 public class TestService : ITestService
 {
-    [NimTransientAttribute]
-    public int TestMethod1(TestInput1 req)
+    private readonly INimBus bus;
+
+    public TestService(INimBus bus)
     {
+        this.bus = bus;
+    }
+    public async int TestMethod1(TestInput1 req)
+    {
+        var res = bus.Run(new TestInput2 { Val = "Hello" });
         return req.Val;
     }
 
