@@ -2,8 +2,8 @@
 
 
 
-public interface INimAspect;
-public abstract class ANimAspect : Attribute, INimAspect
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
+public abstract class ANimAspect : Attribute
 {
     public Type BlockType { get; private init; }
     public AspectPosition AspectPosition { get; private init; }
@@ -15,7 +15,6 @@ public abstract class ANimAspect : Attribute, INimAspect
     }
 }
 
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
 public class NimInputLinkerAttribute<T> : ANimAspect where T : INimInput
 {
     public NimInputLinkerAttribute(AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), position)
@@ -23,7 +22,6 @@ public class NimInputLinkerAttribute<T> : ANimAspect where T : INimInput
     }
 }
 
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
 public class NimAspectLinkerAttribute<T> : ANimAspect where T : INimBlock
 {
     public NimAspectLinkerAttribute(AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), position)
@@ -32,7 +30,7 @@ public class NimAspectLinkerAttribute<T> : ANimAspect where T : INimBlock
 }
 
 
-[AttributeUsage(AttributeTargets.Class)]
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
 public class NimLifetimeAttribute : Attribute
 {
     public NimLifetime Lifetime { get; init; }

@@ -31,6 +31,7 @@ public interface ITestService : INimHandler
 [NimTransient]
 public class TestService : ITestService
 {
+    [NimTransientAttribute]
     public int TestMethod1(TestInput1 req)
     {
         return req.Val;
