@@ -1,6 +1,8 @@
 ﻿namespace Nimozyn;
 
 
+public class NimGeneratedClassAttribute : Attribute;
+
 
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
 public abstract class ANimAspect : Attribute

@@ -8,12 +8,6 @@ public interface INimInput;
 public interface INimInput<T> : INimInput;
 
 
-public interface INimBus
-{
-    Task Run(INimInput input);
-    Task<T> Run<T>(INimInput input);
-    Task<T> Run<T>(INimInput<T> input);
-}
 
 
 public interface INimBlock;

@@ -4,7 +4,7 @@ namespace Nimozyn;
 
 internal class NimManager
 {
-    public Dictionary<Type, ExpandedHandlerMethod> InputTypes;
+    internal Dictionary<Type, ExpandedHandlerMethod> InputTypes;
 
     public NimManager(ImmutableList<ExpandedHandler> handlers)
     {
