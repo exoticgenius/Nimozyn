@@ -9,40 +9,15 @@ var col = new ServiceCollection();
 
 //col.AddTransient<ITestService, TestService>();
 
-col.AddTransient<ITransSvc, TransSvc>();
-col.AddScoped<IScopeSvc, ScopeSvc>();
-col.AddSingleton<ISingSvc, SingSvc>();
 
-//col.ScanNimHandlersAsync();
+col.ScanNimHandlersAsync();
 ServiceProvider provider = col.BuildServiceProvider(true);
 
-var res = provider.CreateScope().ServiceProvider.GetService<ISingSvc>();
+var bus = provider.GetService<INimBus>();
+var res = await bus.Run(new TestInput1 { Val = 10 });
 
 Console.ReadLine();
 
-public interface ITransSvc;
-public class TransSvc : ITransSvc
-{
-    private readonly IScopeSvc svc;
-
-    public TransSvc(IScopeSvc svc)
-    {
-        this.svc = svc;
-    }
-}
-
-public interface IScopeSvc;
-
-public class ScopeSvc: IScopeSvc;
-
-public interface ISingSvc;
-public class SingSvc: ISingSvc
-{
-    public SingSvc(IScopeSvc svc)
-    {
-        
-    }
-}
 
 
 public interface ITestService : INimHandler
@@ -53,6 +28,7 @@ public interface ITestService : INimHandler
 
 [NimAspectLinker<OutputFilter>(AspectPosition.Post)]
 [NimAspectLinker<NimLogger1>(AspectPosition.Pre)]
+[NimTransient]
 public class TestService : ITestService
 {
     public int TestMethod1(TestInput1 req)

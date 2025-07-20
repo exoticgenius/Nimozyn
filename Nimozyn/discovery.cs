@@ -8,98 +8,37 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 
+using static Nimozyn.NimDiscovery;
+
 namespace Nimozyn;
 
-public interface INimSupervisor
+
+public class NimGeneratedClassAttribute : Attribute;
+
+internal class ExpandedHandler
 {
-    object GetService(Type serviceType);
+    public required Type ServiceType { get; init; }
+    public required ImmutableList<ExpandedHandlerMethod> Methods { get; init; }
+    public NimLifetime Lifetime { get; set; }
+    public required BaseMatrix BaseMatrix { get; init; }
 }
 
-public interface INimRootSupervisor : INimSupervisor;
-public class NimRootSupervisor : INimRootSupervisor
+internal class ExpandedHandlerMethod
 {
-    private readonly IServiceProvider sp;
-
-    public NimRootSupervisor(IServiceProvider sp)
-    {
-        this.sp = sp;
-    }
-
-    public object GetService(Type serviceType)
-    {
-        return sp.GetService(serviceType);
-    }
+    public ExpandedHandler? HandlerWrapper { get; set; }
+    public required Type InputType { get; set; }
+    public required MethodInfo handlerMethod { get; set; }
+    public NimLifetime Lifetime { get; set; }
+    public NimCompatibilityMode CompatibilityMode { get; set; }
 }
-
-public interface INimScopeSupervisor : INimSupervisor;
-public class NimScopeSupervisor : INimScopeSupervisor
+public class NimServiceDescriptor
 {
-    private readonly IServiceProvider sp;
-
-    public NimScopeSupervisor(IServiceProvider sp)
-    {
-        this.sp = sp;
-    }
-
-    public object? GetService(Type serviceType)
-    {
-        return sp.GetService(serviceType);
-    }
+    public List<INimTransparentBlock> InputFilterBlocks { get; set; }
+    public List<INimBlock> PreExecuteBlocks { get; set; }
+    public List<INimErrorBlock> OnErrorBlocks { get; set; }
+    public List<INimBlock> PostExecuteBlocks { get; set; }
+    public List<INimTransparentBlock> OutputFilterBlocks { get; set; }
 }
-
-public interface INimHandler;
-public interface INimHandler<T> : INimHandler where T : INimInput;
-
-public enum NimCompatibilityMode
-{
-    Enforce,
-    Ignore,
-    Abort,
-}
-
-public enum NimLifetime
-{
-    Singleton,
-    Scoped,
-    Transient,
-}
-
-public class NimLifetimeAttribute : Attribute
-{
-    public NimLifetime Lifetime { get; init; }
-    public NimCompatibilityMode CompatibilityMode { get; init; }
-    public NimLifetimeAttribute(NimLifetime lifetime, NimCompatibilityMode compatibilityMode)
-    {
-        Lifetime = lifetime;
-        CompatibilityMode = compatibilityMode;
-    }
-}
-
-public class NimTransientAttribute : NimLifetimeAttribute
-{
-    public NimTransientAttribute(NimCompatibilityMode compatibilityMode = NimCompatibilityMode.Enforce) :
-        base(NimLifetime.Transient, compatibilityMode)
-    { }
-}
-
-public class NimScopedAttribute : NimLifetimeAttribute
-{
-    public NimScopedAttribute(NimCompatibilityMode compatibilityMode = NimCompatibilityMode.Enforce) :
-        base(NimLifetime.Scoped, compatibilityMode)
-    { }
-}
-
-public class NimSingletonAttribute : NimLifetimeAttribute
-{
-    public NimSingletonAttribute(NimCompatibilityMode compatibilityMode = NimCompatibilityMode.Enforce) :
-        base(NimLifetime.Singleton, compatibilityMode)
-    { }
-}
-
-public interface INimBus;
-
-public interface INimInput;
-public interface INimInput<T> : INimInput;
 
 public static partial class NimDiscovery
 {
@@ -125,70 +64,84 @@ public static partial class NimDiscovery
         //        service.Lifetime));
         //}
 
+        if (collection.Any(x => x.ImplementationType?.IsAssignableTo(typeof(INimHandler)) == true))
+            throw new InvalidProgramException("handlers must not be registered as services before scan");
+
         var hType = typeof(INimHandler);
         var allHandlers = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(x => x.GetTypes())
-            .Where(x => x.IsAssignableTo(hType))
+            .Where(x => x.IsAssignableTo(hType) && !x.IsInterface)
             .Select(ExpandByMethods)
             .ToImmutableList();
 
+        foreach (var handler in allHandlers)
+        {
+            collection.Add(ServiceDescriptor.Describe(
+                handler.ServiceType,
+                handler.ServiceType,
+                ConvertLifetime(handler.Lifetime)));
+        }
+
+        var manager = new NimManager(allHandlers);
+        collection.AddSingleton(manager);
+        collection.AddTransient<INimBus, NimBus>();
 
 
         return collection;
     }
 
-    internal class ExpandedHandler
+    private static ServiceLifetime ConvertLifetime(NimLifetime lifetime) => lifetime switch
     {
-        public required Type ServiceType { get; init; }
-        public required ImmutableList<ExpandedHandlerMethod> Methods { get; init; }
-        public required BaseMatrix BaseMatrix { get; init; }
-    }
+        NimLifetime.Singleton => ServiceLifetime.Singleton,
+        NimLifetime.Scoped => ServiceLifetime.Scoped,
+        NimLifetime.Transient => ServiceLifetime.Transient,
+        _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "Invalid ServiceLifetime")
+    };
 
-    public class ExpandedHandlerMethod
-    {
-        public required Type InputType { get; set; }
-        public required MethodInfo handlerMethod { get; set; }
-        public NimLifetime Lifetime { get; set; }
-
-        public NimCompatibilityMode CompatibilityMode { get; set; }
-    }
 
     private static ExpandedHandler ExpandByMethods(Type type)
     {
         var iType = typeof(INimInput);
-        var defaultlifetimeAttrs = GetTypeLifetimeAttrs(type);
+        var defaultlifetimeAttrs = GetLifetimeAttrs(type);
 
-        var defaultlifetime = NimLifetime.Scoped;
+        var defaultLifetime = NimLifetime.Scoped;
         var defaultCompMode = NimCompatibilityMode.Enforce;
 
         if (defaultlifetimeAttrs.Length > 0)
-            defaultlifetime = defaultlifetimeAttrs[0].Lifetime;
+            defaultLifetime = defaultlifetimeAttrs[0].Lifetime;
         if (defaultlifetimeAttrs.Length > 0)
             defaultCompMode = defaultlifetimeAttrs[0].CompatibilityMode;
 
         var handlers = type
             .GetMethods()
-            .Where(x => x.GetParameters().First().ParameterType.IsAssignableTo(iType))
+            .Where(x => x.GetParameters().Count() > 0 && x.GetParameters().First().ParameterType.IsAssignableTo(iType))
             .Select(method =>
             {
-                var methodLifeTimes = GetMethodLifetimeAttrs(method);
-
+                var methodLifeTimes = GetLifetimeAttrs(method);
                 return new ExpandedHandlerMethod
                 {
                     handlerMethod = method,
                     InputType = method.GetParameters()[0].ParameterType,
-                    Lifetime = GetLifetime(methodLifeTimes, defaultlifetime),
+                    Lifetime = defaultLifetime = GetLifetime(methodLifeTimes, defaultLifetime),
                     CompatibilityMode = GetCompatibilityMode(methodLifeTimes, defaultCompMode)
                 };
             })
             .ToImmutableList();
 
-        return new ExpandedHandler
+        if (handlers.DistinctBy(x => x.Lifetime).Count() > 1)
+            throw new InvalidProgramException($"Handler {type.Name} has methods with different lifetimes. All methods must have the same lifetime.");
+
+        var wrapper = new ExpandedHandler
         {
             ServiceType = type,
             Methods = handlers,
+            Lifetime = defaultLifetime,
             BaseMatrix = GenerateBaseMatrix(type),
         };
+
+        handlers.ForEach(x => x.HandlerWrapper = wrapper);
+
+        return wrapper;
 
         static NimLifetime GetLifetime(NimLifetimeAttribute[] attrs, NimLifetime defaultLifetime) =>
             attrs.Length > 0 ?
@@ -200,13 +153,9 @@ public static partial class NimDiscovery
             attrs[0].CompatibilityMode :
             defaultCompMode;
 
-        static NimLifetimeAttribute[] GetMethodLifetimeAttrs(MethodInfo method) => method
-            .GetCustomAttributes(typeof(NimLifetimeAttribute), true)
-            .Select(x => (NimLifetimeAttribute)x)
-            .ToArray();
-
-        static NimLifetimeAttribute[] GetTypeLifetimeAttrs(Type type) => type
-            .GetCustomAttributes(typeof(NimLifetimeAttribute), true)
+        static NimLifetimeAttribute[] GetLifetimeAttrs(MemberInfo mi) => mi
+            .GetCustomAttributes(true)
+            .Where(x => x is NimLifetimeAttribute)
             .Select(x => (NimLifetimeAttribute)x)
             .ToArray();
     }
@@ -225,9 +174,6 @@ public static partial class NimDiscovery
 
 
 
-}
-public static partial class NimDiscovery
-{
     private static ConcurrentDictionary<Assembly, ModuleBuilder> ModuleBuilders;
 
     private const string ASSIMBLY_PREFIX = "Runtime_Nim_Assembly_";
@@ -571,90 +517,4 @@ public static partial class NimDiscovery
         }
     }
 
-}
-public class NimServiceDescriptor
-{
-    public List<INimTransparentBlock> InputFilterBlocks { get; set; }
-    public List<INimBlock> PreExecuteBlocks { get; set; }
-    public List<INimErrorBlock> OnErrorBlocks { get; set; }
-    public List<INimBlock> PostExecuteBlocks { get; set; }
-    public List<INimTransparentBlock> OutputFilterBlocks { get; set; }
-}
-
-public interface INimBlock;
-public interface INimNeutralBlock : INimBlock
-{
-    Task Execute();
-}
-public class NimBlockTest : INimNeutralBlock
-{
-    public Task Execute()
-    {
-        throw new NotImplementedException();
-    }
-}
-
-
-public interface INimErrorBlock : INimBlock
-{
-    Task Execute(Exception e, object[] @params);
-}
-public class NimErrorBlockTest : INimErrorBlock
-{
-    public Task Execute(Exception e, object[] @params)
-    {
-        throw new NotImplementedException();
-    }
-}
-
-public interface INimTransparentBlock : INimBlock;
-public interface INimTransparentBlock<T> : INimTransparentBlock
-{
-    Task<T> Execute(T input);
-}
-public class NimTransparentBlockTest<T> : INimTransparentBlock<T>
-{
-    public Task<T> Execute(T input)
-    {
-        throw new NotImplementedException();
-    }
-}
-
-public interface INimAspect;
-public abstract class ANimAspect : Attribute, INimAspect
-{
-    public Type BlockType { get; private init; }
-    public AspectPosition AspectPosition { get; private init; }
-
-    protected ANimAspect(Type blockType, AspectPosition position = AspectPosition.NotSpecified)
-    {
-        BlockType = blockType;
-        AspectPosition = position;
-    }
-}
-
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
-public class NimInputLinkerAttribute<T> : ANimAspect where T : INimInput
-{
-    public NimInputLinkerAttribute(AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), position)
-    {
-    }
-}
-
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Assembly | AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
-public class NimAspectLinkerAttribute<T> : ANimAspect where T : INimBlock
-{
-    public NimAspectLinkerAttribute(AspectPosition position = AspectPosition.NotSpecified) : base(typeof(T), position)
-    {
-    }
-}
-
-public class NimGeneratedClassAttribute : Attribute;
-
-public enum AspectPosition
-{
-    NotSpecified,
-    Pre,
-    Post,
-    Wrap,
 }
