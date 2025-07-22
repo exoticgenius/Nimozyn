@@ -27,7 +27,7 @@ public static partial class NimDiscovery
         ModuleBuilders = new();
     }
 
-    public static IServiceCollection ScanNimHandlersAsync(this IServiceCollection collection)
+    public static ImmutableList<ExpandedHandler> ScanNimHandlersAsync(this IServiceCollection collection)
     {
         collection.TryAddSingleton<INimRootSupervisor, NimRootSupervisor>();
         collection.TryAddScoped<INimScopeSupervisor, NimScopeSupervisor>();
@@ -38,7 +38,7 @@ public static partial class NimDiscovery
         var hType = typeof(INimHandler);
         var allHandlers = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(x => x.GetTypes())
-            .Where(x => x.IsAssignableTo(hType) && !x.IsInterface)
+            .Where(x => x.IsAssignableTo(hType) && !x.IsInterface && x is not null)
             .Select(ExpandByMethods)
             .ToImmutableList();
 
@@ -54,7 +54,7 @@ public static partial class NimDiscovery
         collection.AddSingleton(manager);
         collection.AddTransient<INimBus, NimBus>();
 
-        return collection;
+        return allHandlers;
     }
 
     private static ServiceLifetime ConvertLifetime(NimLifetime lifetime) => lifetime switch
@@ -283,13 +283,13 @@ public static partial class NimDiscovery
         return bm;
     }
 
-    internal class BaseMatrix
+    public class BaseMatrix
     {
         public AspectMatrix AssemblyMatrix { get; set; }
         public AspectMatrix TypeMatrix { get; set; }
     }
 
-    internal class AspectMatrix
+    public class AspectMatrix
     {
         public List<ANimAspect> InputFilter { get; set; }
         public List<ANimAspect> Pre { get; set; }

@@ -3,12 +3,15 @@ using Impl;
 using Microsoft.AspNetCore.Mvc;
 
 using Nimozyn;
+
+using System.Reflection;
+Assembly.GetCallingAssembly().GetReferencedAssemblies().ToList().ForEach(x=>AppDomain.CurrentDomain.Load(x));
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-builder.Services.ScanNimHandlersAsync();
+var apps = builder.Services.ScanNimHandlersAsync();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
