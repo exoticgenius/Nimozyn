@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
+using System;
 using System.Diagnostics;
 
 namespace Nimozyn;
@@ -36,7 +37,7 @@ internal sealed class NimBus : INimBus
     }
 
     [DebuggerStepThrough]
-    public T? Run<T>(INimInput input)
+    public T Run<T>(INimInput input)
     {
         var handler = manager.GetHandlerMethod(input.GetType());
 
@@ -54,20 +55,18 @@ internal sealed class NimBus : INimBus
     }
 
     [DebuggerStepThrough]
-    public T? Run<T>(INimInput<T> input)
+    public T Run<T>(INimInput<T> input)
     {
-        var handler = manager.GetHandlerMethod(input.GetType());
+        PrepareData(input, out var handler, out var service);
 
-        if (handler is null)
-            throw new InvalidOperationException($"No handler found for input type {input.GetType().Name}");
+        return ((ILLauncher<INimInput, T>)handler.LauncherInstance).Execute(service, input);
 
-        if (handler.handlerMethod.ReturnType != typeof(T) && handler.handlerMethod.ReturnType != typeof(Task<T>))
-            throw new InvalidOperationException($"Handler method {handler.handlerMethod.Name} does not return type {typeof(T).Name}");
+    }
 
-        var service = serviceProvider.GetRequiredService(handler?.HandlerWrapper?.ServiceType ?? throw new InvalidOperationException("No handler found for input type"));
-
-        var res = handler.handlerMethod.Invoke(service, [input]);
-
-        return (T)res;
+    [DebuggerStepThrough]
+    private void PrepareData<T>(INimInput<T> input, out ExpandedHandlerMethod? handler, out INimHandler service)
+    {
+        handler = manager.GetHandlerMethod(input.GetType());
+        service = ((INimHandler)serviceProvider.GetRequiredService(handler?.HandlerWrapper?.ServiceType) ?? throw new InvalidOperationException("No handler found for input type"));
     }
 }

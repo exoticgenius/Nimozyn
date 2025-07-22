@@ -84,12 +84,16 @@ public static partial class NimDiscovery
             .Select(method =>
             {
                 var methodLifeTimes = GetLifetimeAttrs(method);
+                var launcherType = GenerateHandlerLauncher(method);
+                var launcherInstance = Activator.CreateInstance(launcherType);
                 return new ExpandedHandlerMethod
                 {
                     handlerMethod = method,
                     InputType = method.GetParameters()[0].ParameterType,
                     Lifetime = defaultLifetime = GetLifetime(methodLifeTimes, defaultLifetime),
-                    CompatibilityMode = GetCompatibilityMode(methodLifeTimes, defaultCompMode)
+                    CompatibilityMode = GetCompatibilityMode(methodLifeTimes, defaultCompMode),
+                    LauncherType = launcherType,
+                    LauncherInstance =(ILLauncher) launcherInstance,
                 };
             })
             .ToImmutableList();
@@ -126,6 +130,87 @@ public static partial class NimDiscovery
             .ToArray();
     }
 
+
+    public static Type GenerateHandlerLauncher(MethodInfo targetMethod)
+    {
+        var type = targetMethod.DeclaringType;
+        if (!typeof(INimHandler).IsAssignableFrom(type))
+            return default!;
+
+        var pure = ExtractPureType(type);
+
+        var moduleBuilder = GenerateModuleBuilder(pure, type);
+        var typeBuilder = GenerateLauncherType(targetMethod, moduleBuilder);
+
+        GenerateLauncherMethod(targetMethod, typeBuilder);
+
+        return typeBuilder.CreateType()!;
+    }
+    private static TypeBuilder GenerateLauncherType(MethodInfo targetMethod, ModuleBuilder moduleBuilder)
+    {
+        var typeName = $"{TYPE_PREFIX}{Guid.NewGuid()}_{targetMethod.DeclaringType!.Name}";
+
+        var typeBuilder = moduleBuilder.DefineType(
+            typeName,
+            TypeAttributes.Public,
+            null,
+            [
+                typeof(ILLauncher<,>)
+                    .MakeGenericType(
+                        typeof(INimInput), 
+                        targetMethod.ReturnType)
+            ]);
+        return typeBuilder;
+    }
+
+    private static void GenerateLauncherMethod(MethodInfo targetMethod, TypeBuilder typeBuilder)
+    {
+        
+        Type[] inputType = [typeof(INimHandler), typeof(INimInput)];
+        var outputType = targetMethod.ReturnType;
+
+        var method = typeBuilder.DefineMethod(
+            "Execute",
+            MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.Virtual | MethodAttributes.NewSlot,
+            CallingConventions.Standard,
+            outputType,
+            inputType);
+        var il = method.GetILGenerator();
+
+
+        il.Emit(OpCodes.Ldarg_1);
+        //il.Emit(OpCodes.Ldarg_1);
+        //il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString"));
+        //il.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", [typeof(string)]));
+
+        il.Emit(OpCodes.Ldarg_2);
+        //il.Emit(OpCodes.Ldarg_2);
+        //il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString"));
+        //il.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", [typeof(string)]));
+        il.Emit(OpCodes.Callvirt, targetMethod);
+        il.Emit(OpCodes.Ret);
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     private static Type SelectSupervisor(ServiceLifetime lifetime) => lifetime switch
     {
         ServiceLifetime.Scoped => typeof(INimScopeSupervisor),
@@ -150,34 +235,6 @@ public static partial class NimDiscovery
         return typeBuilder.CreateType()!;
     }
 
-    public interface ILLauncher
-    {
-        public object Execute(object target, MethodInfo methodinfo, object input);
-    }
-
-    public static Type GenerateLauncher()
-    {
-        var moduleBuilder = GenerateModuleBuilder(typeof(ILLauncher), typeof(ILLauncher));
-        var typeBuilder = GenerateType(typeof(ILLauncher), moduleBuilder);
-
-        Type[] parameters = [typeof(object), typeof(object), typeof(MethodInfo)];
-
-        var returnType = typeof(object);
-
-        var method = typeBuilder.DefineMethod(
-            "ILLauncher",
-            MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.Virtual | MethodAttributes.NewSlot,
-            CallingConventions.Standard | CallingConventions.HasThis,
-            returnType,
-            parameters);
-        var il = method.GetILGenerator();
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.stele); // this is method info
-        il.Emit(OpCodes.Call,);
-
-    }
 
     private static BaseMatrix GenerateBaseMatrix(Type type)
     {

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Immutable;
+using System.Diagnostics;
 
 namespace Nimozyn;
 
@@ -12,6 +13,7 @@ internal class NimManager
             .ToDictionary(x => x.InputType, x => x);
     }
 
+    [DebuggerStepThrough]
     public ExpandedHandlerMethod? GetHandlerMethod(Type inputType)
     {
         if (InputTypes.TryGetValue(inputType, out var method))

@@ -15,11 +15,13 @@ internal class ExpandedHandler
 
 internal class ExpandedHandlerMethod
 {
-    public ExpandedHandler? HandlerWrapper { get; set; }
-    public required Type InputType { get; set; }
-    public required MethodInfo handlerMethod { get; set; }
-    public NimLifetime Lifetime { get; set; }
-    public NimCompatibilityMode CompatibilityMode { get; set; }
+    public ExpandedHandler? HandlerWrapper { get; internal set; }
+    public required Type InputType { get; internal init; }
+    public required MethodInfo handlerMethod { get; internal init; }
+    public NimLifetime Lifetime { get; internal init; }
+    public NimCompatibilityMode CompatibilityMode { get; internal init; }
+    public Type LauncherType { get; internal init; }
+    public ILLauncher LauncherInstance { get; internal init; }
 }
 public class NimServiceDescriptor
 {

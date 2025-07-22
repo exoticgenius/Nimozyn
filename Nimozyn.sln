@@ -1,11 +1,15 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.12.35527.113 d17.12
+VisualStudioVersion = 17.12.35527.113
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nimozyn", "Nimozyn\Nimozyn.csproj", "{4B2A12B4-AB87-47EA-8D68-34D981BEC7E8}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{32055BAC-6ABA-4661-88A7-01735CD10FD1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Impl", "Impl\Impl.csproj", "{6890157C-2EB0-4326-A620-B28C2678BA91}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "API", "API\API.csproj", "{5861C470-5623-4299-82BA-053830066B84}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,8 +25,19 @@ Global
 		{32055BAC-6ABA-4661-88A7-01735CD10FD1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{32055BAC-6ABA-4661-88A7-01735CD10FD1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{32055BAC-6ABA-4661-88A7-01735CD10FD1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6890157C-2EB0-4326-A620-B28C2678BA91}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6890157C-2EB0-4326-A620-B28C2678BA91}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6890157C-2EB0-4326-A620-B28C2678BA91}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6890157C-2EB0-4326-A620-B28C2678BA91}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5861C470-5623-4299-82BA-053830066B84}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5861C470-5623-4299-82BA-053830066B84}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5861C470-5623-4299-82BA-053830066B84}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5861C470-5623-4299-82BA-053830066B84}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {160EE03A-AD22-435F-A391-F294A39848FE}
 	EndGlobalSection
 EndGlobal

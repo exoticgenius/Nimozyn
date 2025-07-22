@@ -7,7 +7,11 @@ public interface INimHandler<T> : INimHandler where T : INimInput;
 public interface INimInput;
 public interface INimInput<T> : INimInput;
 
-
+public interface ILLauncher;
+public interface ILLauncher<in Input, Output> : ILLauncher
+{
+    public Output Execute(INimHandler target, Input input);
+}
 
 
 public interface INimBlock;
