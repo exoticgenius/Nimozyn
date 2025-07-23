@@ -5,7 +5,7 @@ namespace Impl
 
     public interface ITestService : INimHandler
     {
-        int TestMethod1(TestInput1 req);
+        Task<int> TestMethod1(TestInput1 req);
         string TestMethod2(TestInput2 req);
     }
 
@@ -23,8 +23,9 @@ namespace Impl
             this.bus = bus;
             x = 2;
         }
-        public int TestMethod1(TestInput1 req)
+        public async Task<int> TestMethod1(TestInput1 req)
         {
+            await Task.Yield();
             var res = bus.Run(new TestInput2 { Val = "Hello" });
             Console.WriteLine("inside");
             return x;

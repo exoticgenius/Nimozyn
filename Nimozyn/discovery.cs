@@ -41,7 +41,7 @@ public static partial class NimDiscovery
             .Where(x => x.IsAssignableTo(hType) && !x.IsInterface && x is not null)
             .Select(ExpandByMethods)
             .ToImmutableList();
-
+        
         foreach (var handler in allHandlers)
         {
             collection.Add(ServiceDescriptor.Describe(
@@ -149,6 +149,12 @@ public static partial class NimDiscovery
     private static TypeBuilder GenerateLauncherType(MethodInfo targetMethod, ModuleBuilder moduleBuilder)
     {
         var typeName = $"{TYPE_PREFIX}{Guid.NewGuid()}_{targetMethod.DeclaringType!.Name}";
+        var returnType = targetMethod.ReturnType;
+
+        if (!returnType.IsAssignableTo(typeof(Task)))
+        {
+            returnType = typeof(Task<>).MakeGenericType(returnType);
+        }
 
         var typeBuilder = moduleBuilder.DefineType(
             typeName,
@@ -157,8 +163,8 @@ public static partial class NimDiscovery
             [
                 typeof(ILLauncher<,>)
                     .MakeGenericType(
-                        typeof(INimInput), 
-                        targetMethod.ReturnType)
+                        typeof(INimInput),
+                        returnType)
             ]);
         return typeBuilder;
     }
@@ -167,13 +173,18 @@ public static partial class NimDiscovery
     {
         
         Type[] inputType = [typeof(INimHandler), typeof(INimInput)];
-        var outputType = targetMethod.ReturnType;
+        var returnType = targetMethod.ReturnType;
+
+        if (!returnType.IsAssignableTo(typeof(Task)))
+        {
+            returnType = typeof(Task<>).MakeGenericType(returnType);
+        }
 
         var method = typeBuilder.DefineMethod(
             "Execute",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.Virtual | MethodAttributes.NewSlot,
             CallingConventions.Standard,
-            outputType,
+            returnType,
             inputType);
         var il = method.GetILGenerator();
 
@@ -188,6 +199,14 @@ public static partial class NimDiscovery
         //il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString"));
         //il.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", [typeof(string)]));
         il.Emit(OpCodes.Callvirt, targetMethod);
+
+        if(!targetMethod.ReturnType.IsAssignableTo(typeof(Task)))
+        {
+            il.Emit(OpCodes.Call, typeof(Task).GetMethod(nameof(Task.FromResult))!
+                .MakeGenericMethod(targetMethod.ReturnType));
+            //return;
+        }
+        
         il.Emit(OpCodes.Ret);
 
     }

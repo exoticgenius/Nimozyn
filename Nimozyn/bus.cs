@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
 using System;
+using System.Data;
 using System.Diagnostics;
 
 namespace Nimozyn;
@@ -9,7 +10,7 @@ public interface INimBus
 {
     void Run(INimInput input);
     T Run<T>(INimInput input);
-    T Run<T>(INimInput<T> input);
+    Task<T> Run<T>(INimInput<T> input);
 }
 
 internal sealed class NimBus : INimBus
@@ -54,19 +55,22 @@ internal sealed class NimBus : INimBus
         return (T)res;
     }
 
-    [DebuggerStepThrough]
-    public T Run<T>(INimInput<T> input)
+    //[DebuggerStepThrough]
+    public Task<T> Run<T>(INimInput<T> input)
     {
         PrepareData(input, out var handler, out var service);
 
         return ((ILLauncher<INimInput, T>)handler.LauncherInstance).Execute(service, input);
-
     }
 
-    [DebuggerStepThrough]
-    private void PrepareData<T>(INimInput<T> input, out ExpandedHandlerMethod? handler, out INimHandler service)
+    //[DebuggerStepThrough]
+    private void PrepareData<T>(INimInput<T> input, out ExpandedHandlerMethod handler, out INimHandler service)
     {
-        handler = manager.GetHandlerMethod(input.GetType());
-        service = ((INimHandler)serviceProvider.GetRequiredService(handler?.HandlerWrapper?.ServiceType) ?? throw new InvalidOperationException("No handler found for input type"));
+        handler = manager.GetHandlerMethod(input.GetType()) ??
+            throw new NoNullAllowedException(); ;
+
+        service = ((INimHandler)serviceProvider
+            .GetRequiredService(handler.HandlerWrapper!.ServiceType) ??
+            throw new NoNullAllowedException("No handler found for input type"));
     }
 }
