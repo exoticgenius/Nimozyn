@@ -9,7 +9,7 @@ using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 
 
-namespace Nimozyn;
+namespace EGO.Nimozyn;
 
 
 

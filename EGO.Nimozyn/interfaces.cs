@@ -1,4 +1,4 @@
-﻿namespace Nimozyn;
+﻿namespace EGO.Nimozyn;
 
 public interface INimHandler;
 public interface INimHandler<T> : INimHandler where T : INimInput;

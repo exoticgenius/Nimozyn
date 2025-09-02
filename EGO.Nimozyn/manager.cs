@@ -1,7 +1,7 @@
 ﻿using System.Collections.Immutable;
 using System.Diagnostics;
 
-namespace Nimozyn;
+namespace EGO.Nimozyn;
 
 internal class NimManager
 {

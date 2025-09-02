@@ -1,4 +1,4 @@
-﻿namespace Nimozyn;
+﻿namespace EGO.Nimozyn;
 
 public enum NimLifetime
 {

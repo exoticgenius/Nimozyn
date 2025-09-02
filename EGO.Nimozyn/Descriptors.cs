@@ -3,7 +3,7 @@ using System.Reflection;
 
 using static Nimozyn.NimDiscovery;
 
-namespace Nimozyn;
+namespace EGO.Nimozyn;
 
 public class ExpandedHandler
 {

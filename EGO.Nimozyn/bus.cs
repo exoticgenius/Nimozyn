@@ -4,7 +4,7 @@ using System;
 using System.Data;
 using System.Diagnostics;
 
-namespace Nimozyn;
+namespace EGO.Nimozyn;
 
 public interface INimBus
 {

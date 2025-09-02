@@ -13,7 +13,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Impl\Impl.csproj" />
-    <ProjectReference Include="..\Nimozyn\Nimozyn.csproj" />
   </ItemGroup>
 
   <!--<ItemGroup>

@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace Nimozyn;
+namespace EGO.Nimozyn;
 
 public interface INimSupervisor
 {
