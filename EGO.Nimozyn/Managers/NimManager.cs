@@ -1,7 +1,9 @@
-﻿using System.Collections.Immutable;
+﻿using EGO.Nimozyn.Descriptors;
+
+using System.Collections.Immutable;
 using System.Diagnostics;
 
-namespace EGO.Nimozyn;
+namespace EGO.Nimozyn.Managers;
 
 internal class NimManager
 {

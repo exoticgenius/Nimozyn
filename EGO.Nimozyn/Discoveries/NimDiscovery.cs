@@ -1,4 +1,11 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using EGO.Nimozyn.Attributes;
+using EGO.Nimozyn.Buses;
+using EGO.Nimozyn.Descriptors;
+using EGO.Nimozyn.Enums;
+using EGO.Nimozyn.Interfaces;
+using EGO.Nimozyn.Supervisors;
+
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using System.Collections.Concurrent;
@@ -9,7 +16,7 @@ using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 
 
-namespace EGO.Nimozyn;
+namespace EGO.Nimozyn.Discoveries;
 
 
 

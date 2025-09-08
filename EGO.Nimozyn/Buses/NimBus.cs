@@ -1,17 +1,14 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using EGO.Nimozyn.Descriptors;
+using EGO.Nimozyn.Interfaces;
+using EGO.Nimozyn.Managers;
+
+using Microsoft.Extensions.DependencyInjection;
 
 using System;
 using System.Data;
 using System.Diagnostics;
 
-namespace EGO.Nimozyn;
-
-public interface INimBus
-{
-    void Run(INimInput input);
-    T Run<T>(INimInput input);
-    Task<T> Run<T>(INimInput<T> input);
-}
+namespace EGO.Nimozyn.Buses;
 
 internal sealed class NimBus : INimBus
 {
@@ -69,8 +66,8 @@ internal sealed class NimBus : INimBus
         handler = manager.GetHandlerMethod(input.GetType()) ??
             throw new NoNullAllowedException(); ;
 
-        service = ((INimHandler)serviceProvider
+        service = (INimHandler)serviceProvider
             .GetRequiredService(handler.HandlerWrapper!.ServiceType) ??
-            throw new NoNullAllowedException("No handler found for input type"));
+            throw new NoNullAllowedException("No handler found for input type");
     }
 }
