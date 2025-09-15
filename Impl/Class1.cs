@@ -1,4 +1,8 @@
-﻿using Nimozyn;
+﻿using EGO.Nimozyn.Attributes;
+using EGO.Nimozyn.Buses;
+using EGO.Nimozyn.Enums;
+using EGO.Nimozyn.Interfaces;
+using EGO.Nimozyn.Supervisors;
 
 namespace Impl
 {

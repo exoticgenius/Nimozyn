@@ -1,8 +1,9 @@
+using EGO.Nimozyn.Buses;
+using EGO.Nimozyn.Discoveries;
 using Impl;
 
 using Microsoft.AspNetCore.Mvc;
 
-using Nimozyn;
 
 using System.Reflection;
 Assembly.GetCallingAssembly().GetReferencedAssemblies().ToList().ForEach(x=>AppDomain.CurrentDomain.Load(x));

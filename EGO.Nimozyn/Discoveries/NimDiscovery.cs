@@ -1,8 +1,11 @@
-﻿using EGO.Nimozyn.Attributes;
+﻿using EGO.Gladius.Contracts;
+using EGO.Gladius.DataTypes;
+using EGO.Nimozyn.Attributes;
 using EGO.Nimozyn.Buses;
 using EGO.Nimozyn.Descriptors;
 using EGO.Nimozyn.Enums;
 using EGO.Nimozyn.Interfaces;
+using EGO.Nimozyn.Managers;
 using EGO.Nimozyn.Supervisors;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -48,7 +51,7 @@ public static partial class NimDiscovery
             .Where(x => x.IsAssignableTo(hType) && !x.IsInterface && x is not null)
             .Select(ExpandByMethods)
             .ToImmutableList();
-        
+
         foreach (var handler in allHandlers)
         {
             collection.Add(ServiceDescriptor.Describe(
@@ -100,7 +103,7 @@ public static partial class NimDiscovery
                     Lifetime = defaultLifetime = GetLifetime(methodLifeTimes, defaultLifetime),
                     CompatibilityMode = GetCompatibilityMode(methodLifeTimes, defaultCompMode),
                     LauncherType = launcherType,
-                    LauncherInstance =(ILLauncher) launcherInstance,
+                    LauncherInstance = (ILLauncher)launcherInstance,
                 };
             })
             .ToImmutableList();
@@ -153,6 +156,7 @@ public static partial class NimDiscovery
 
         return typeBuilder.CreateType()!;
     }
+    
     private static TypeBuilder GenerateLauncherType(MethodInfo targetMethod, ModuleBuilder moduleBuilder)
     {
         var typeName = $"{TYPE_PREFIX}{Guid.NewGuid()}_{targetMethod.DeclaringType!.Name}";
@@ -178,7 +182,7 @@ public static partial class NimDiscovery
 
     private static void GenerateLauncherMethod(MethodInfo targetMethod, TypeBuilder typeBuilder)
     {
-        
+
         Type[] inputType = [typeof(INimHandler), typeof(INimInput)];
         var returnType = targetMethod.ReturnType;
 
@@ -207,35 +211,16 @@ public static partial class NimDiscovery
         //il.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", [typeof(string)]));
         il.Emit(OpCodes.Callvirt, targetMethod);
 
-        if(!targetMethod.ReturnType.IsAssignableTo(typeof(Task)))
+        if (!targetMethod.ReturnType.IsAssignableTo(typeof(Task)))
         {
             il.Emit(OpCodes.Call, typeof(Task).GetMethod(nameof(Task.FromResult))!
                 .MakeGenericMethod(targetMethod.ReturnType));
             //return;
         }
-        
+
         il.Emit(OpCodes.Ret);
 
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     private static Type SelectSupervisor(ServiceLifetime lifetime) => lifetime switch
     {
@@ -243,23 +228,6 @@ public static partial class NimDiscovery
         _ => typeof(INimRootSupervisor),
     };
 
-    public static Type Extend(Type type, ServiceLifetime lifetime)
-    {
-        if (!typeof(INimHandler).IsAssignableFrom(type))
-            return null;
-
-        var pure = ExtractPureType(type);
-        var baseMatrix = GenerateBaseMatrix(type);
-
-        var moduleBuilder = GenerateModuleBuilder(pure, type);
-        var typeBuilder = GenerateType(type, moduleBuilder);
-        GenerateConstructors(type, lifetime, typeBuilder);
-
-        foreach (var item in type.GetRuntimeMethods())
-            DescribeMethod(item, typeBuilder, lifetime, baseMatrix);
-
-        return typeBuilder.CreateType()!;
-    }
 
 
     private static BaseMatrix GenerateBaseMatrix(Type type)
@@ -324,50 +292,6 @@ public static partial class NimDiscovery
         public List<ANimAspect> OutputFilter { get; set; }
     }
 
-    private static void DescribeMethod(MethodInfo targetMethod, TypeBuilder typeBuilder, ServiceLifetime lifetime, BaseMatrix baseMatrix)
-    {
-        var descriptor = new NimServiceDescriptor { };
-        var methodAttrs = targetMethod.GetCustomAttributes(true);
-
-        var methodMatrix = new AspectMatrix
-        {
-            InputFilter = methodAttrs
-                    .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Pre or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimTransparentBlock))).Select(x => (ANimAspect)x).ToList(),
-
-            Pre = methodAttrs
-                    .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Pre or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimNeutralBlock))).Select(x => (ANimAspect)x).ToList(),
-
-            OnError = methodAttrs
-                    .Where(x => x is ANimAspect na && na.BlockType is INimErrorBlock).Select(x => (ANimAspect)x).ToList(),
-
-            Post = methodAttrs
-                    .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Post or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimNeutralBlock))).Select(x => (ANimAspect)x).ToList(),
-
-            OutputFilter = methodAttrs
-                    .Where(x => x is ANimAspect na && na.AspectPosition is AspectPosition.Post or AspectPosition.Wrap && na.BlockType.IsAssignableTo(typeof(INimTransparentBlock))).Select(x => (ANimAspect)x).ToList()
-        };
-
-        methodMatrix.Pre.AddRange(baseMatrix.AssemblyMatrix.Pre);
-        methodMatrix.Pre.AddRange(baseMatrix.TypeMatrix.Pre);
-
-        methodMatrix.OnError.AddRange(baseMatrix.TypeMatrix.OnError);
-
-        methodMatrix.Post.AddRange(baseMatrix.AssemblyMatrix.Post);
-        methodMatrix.Post.AddRange(baseMatrix.TypeMatrix.Post);
-
-        methodMatrix.OutputFilter.AddRange(baseMatrix.AssemblyMatrix.OutputFilter
-            .Where(x => x.BlockType.GetInterfaces().First(x => x.IsGenericType).GenericTypeArguments[0] == targetMethod.ReturnType));
-        methodMatrix.OutputFilter.AddRange(baseMatrix.TypeMatrix.OutputFilter
-            .Where(x => x.BlockType.GetInterfaces().First(x => x.IsGenericType).GenericTypeArguments[0] == targetMethod.ReturnType));
-
-        methodMatrix.InputFilter.AddRange(baseMatrix.AssemblyMatrix.InputFilter
-            .Where(x => targetMethod.GetParameters().Any(z => z.ParameterType == x.BlockType.GenericTypeArguments[0])));
-
-
-
-        GenerateMethod(descriptor, targetMethod, typeBuilder, lifetime, methodMatrix);
-    }
-
     private static Type ExtractPureType(Type type)
     {
         while (type.GetCustomAttribute<NimGeneratedClassAttribute>() != null) type = type.BaseType;
@@ -385,59 +309,11 @@ public static partial class NimDiscovery
                 .DefineDynamicModule("Module"));
     }
 
-    private static TypeBuilder GenerateType(Type type, ModuleBuilder moduleBuilder)
-    {
-        var typeName = $"{TYPE_PREFIX}{Guid.NewGuid()}_{type.Name}";
-
-        var typeBuilder = moduleBuilder.DefineType(
-            typeName,
-            TypeAttributes.Public,
-            type,
-            type.GetInterfaces());
-        return typeBuilder;
-    }
-
-    private static void GenerateConstructors(Type type, ServiceLifetime lifetime, TypeBuilder typeBuilder)
-    {
-        bool alreadyIsNim = false;
-        if (type.GetField(SUPERVISOR_FIELD_NAME, BindingFlags.Instance) is null)
-            typeBuilder.DefineField(SUPERVISOR_FIELD_NAME, SelectSupervisor(lifetime), FieldAttributes.Family);
-        else
-            alreadyIsNim = true;
-
-        foreach (var item in type.GetConstructors())
-            GenerateConstructor(typeBuilder, item, alreadyIsNim, lifetime);
-    }
-    private static void GenerateConstructor(TypeBuilder type, ConstructorInfo constructor, bool alreadyIsNim, ServiceLifetime lifetime)
+    private static void GenerateSPRMethod(MethodInfo methodinfo, TypeBuilder type)
     {
         var prms = new List<Type>();
-        prms.AddRange(constructor.GetParameters().Select(x => x.ParameterType).ToArray());
-        prms.Add(SelectSupervisor(lifetime));
-        var newCtor = type.DefineConstructor(constructor.Attributes, constructor.CallingConvention, prms.ToArray());
-        var il = newCtor.GetILGenerator();
-
-        for (int i = 0, j = alreadyIsNim ? 0 : 1; i < prms.Count + j; i++)
-            il.Emit(OpCodes.Ldarg, i);
-
-        il.Emit(OpCodes.Call, constructor);
-
-        if (alreadyIsNim)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldarg, prms.Count + 1);
-            il.Emit(OpCodes.Stfld, type.GetField(SUPERVISOR_FIELD_NAME, BindingFlags.Instance)!);
-        }
-
-        il.Emit(OpCodes.Ret);
-    }
-
-    private static void GenerateMethod(NimServiceDescriptor descriptor, MethodInfo methodinfo, TypeBuilder type, ServiceLifetime lifetime, AspectMatrix methodMatrix)
-    {
-        var parameters = new List<Type>();
-        parameters.AddRange(methodinfo.GetParameters().Select(x => x.ParameterType).ToArray());
-
+        prms.AddRange(methodinfo.GetParameters().Select(x => x.ParameterType).ToArray());
         var returnType = methodinfo.ReturnType;
-
         var method = type.DefineMethod(
             methodinfo.Name,
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.Virtual | MethodAttributes.NewSlot,
@@ -446,120 +322,95 @@ public static partial class NimDiscovery
             methodinfo.GetParameters().Select(x => x.ParameterType).ToArray());
         var il = method.GetILGenerator();
 
-        il.Emit(OpCodes.Ldarg_S, 1);
-        foreach (var pre in methodMatrix.Pre)
-        {
-            il.Emit(OpCodes.Ldfld, type.GetFields().First(x => x.Name == SUPERVISOR_FIELD_NAME));
-            il.Emit(OpCodes.Ldtoken, pre.BlockType);
-            il.Emit(OpCodes.Callvirt, typeof(INimSupervisor).GetMethods().First(x => x.Name == "GetService"));
-            il.Emit(OpCodes.Callvirt, typeof(INimNeutralBlock).GetMethods().First(x => x.Name == "Execute"));
-            il.Emit(OpCodes.Starg_S, 1);
-            il.Emit(OpCodes.Ldarg_S, 1);
-        }
-
-        if (IsTask(returnType))
-            return;
-
-        il.DeclareLocal(methodinfo.ReturnType); // 0
-        il.DeclareLocal(typeof(Exception)); //     1
-
-
-
         var exBlock = il.BeginExceptionBlock();
+        var end = il.DefineLabel();
+        il.DeclareLocal(methodinfo.ReturnType); //      0
+        il.DeclareLocal(typeof(Type)); //               1
+        il.DeclareLocal(typeof(Exception)); //          2
 
-        for (var i = 0; i < parameters.Count + 1; i++)
+        for (var i = 0; i < prms.Count + 1; i++)
             il.Emit(OpCodes.Ldarg, i);
         il.Emit(OpCodes.Call, methodinfo);
 
-
-
-
-
-
-
-
-
+        if (typeof(Task).IsAssignableFrom(returnType))
         {
-            //else if (typeof(Task<>).IsAssignableFrom(returnType))
-            //{
-            //    Type[] genArg = [returnType.GenericTypeArguments[0]];
+            Type[] genArg = [returnType.GenericTypeArguments[0]];
 
-            //    var suppressor = "SuppressTask";
+            if (genArg[0].GenericTypeArguments.Length > 0)
+                genArg = genArg[0].GenericTypeArguments;
 
-            //    il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == suppressor).MakeGenericMethod(genArg));
-            //}
-            //else if (typeof(ValueTask<>).IsAssignableFrom(returnType))
-            //{
-            //    Type[] genArg = [returnType.GenericTypeArguments[0]];
+            var suppressor = "SuppressTask";
+            if (typeof(VSP).IsAssignableFrom(genArg[0]))
+                suppressor = "SuppressTaskVoid";
 
-            //    var suppressor = "SuppressValueTask";
-
-            //    il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == "SuppressValueTask").MakeGenericMethod(genArg));
-            //}
-            //else if (typeof(Task).IsAssignableFrom(returnType))
-            //{
-            //    var suppressor = "SuppressTaskVoid";
-
-            //    il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == suppressor).MakeGenericMethod([]));
-            //}
-            //else if (typeof(ValueTask).IsAssignableFrom(returnType))
-            //{
-            //    var suppressor = "SuppressValueTaskVoid";
-
-            //    il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == "SuppressValueTask").MakeGenericMethod([]));
-            //}
+            il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == suppressor).MakeGenericMethod(genArg));
         }
-    }
-
-    [MethodImpl(MethodImplOptions.Synchronized)]
-    private static bool IsTask(Type returnType) =>
-        typeof(Task).IsAssignableFrom(returnType) ||
-        typeof(Task<>).IsAssignableFrom(returnType) ||
-        typeof(ValueTask).IsAssignableFrom(returnType) ||
-        typeof(ValueTask<>).IsAssignableFrom(returnType);
-
-
-    [DebuggerStepThrough]
-    public static async Task SuppressTaskVoid(Task input)
-    {
-        try
+        else if (typeof(ValueTask).IsAssignableFrom(returnType))
         {
-            await input;
-        }
-        catch (Exception ex)
-        {
-            throw;
-        }
-    }
+            Type[] genArg = [returnType.GenericTypeArguments[0]];
 
-    [DebuggerStepThrough]
-    public static async Task<T> SuppressTask<T>(Task<T> input)
-    {
-        try
-        {
-            return await input;
-        }
-        catch (Exception ex)
-        {
-            throw;
-        }
-    }
+            if (genArg[0].GenericTypeArguments.Length > 0)
+                genArg = genArg[0].GenericTypeArguments;
 
-    [DebuggerStepThrough]
-    public static async ValueTask SuppressValueTaskVoid(ValueTask input)
-    {
-        try
-        {
-            await input;
+            var suppressor = "SuppressValueTask";
+            if (typeof(VSP).IsAssignableFrom(genArg[0]))
+                suppressor = "SuppressValueTaskVoid";
+
+            il.Emit(OpCodes.Call, typeof(NimDiscovery).GetMethods().First(x => x.Name == suppressor).MakeGenericMethod(genArg));
         }
-        catch (Exception ex)
+
+        il.Emit(OpCodes.Stloc_0);
+        il.Emit(OpCodes.Leave_S, end);
+        il.BeginCatchBlock(typeof(Exception));
+
+        il.Emit(OpCodes.Stloc_2);
+        il.Emit(OpCodes.Ldtoken, methodinfo);
+        il.Emit(OpCodes.Ldloc_1); // 1 => 0
+
+        il.Emit(OpCodes.Ldc_I4, prms.Count);
+        il.Emit(OpCodes.Newarr, typeof(object)); // => 1
+
+        for (var i = 0; i < prms.Count; i++)
         {
-            throw;
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4, i);
+            il.Emit(OpCodes.Ldarg, i + 1);
+            if (prms[i].IsValueType)
+                il.Emit(OpCodes.Box, prms[i]);
+            il.Emit(OpCodes.Stelem_Ref);
         }
+
+        il.Emit(OpCodes.Ldloc_2); //2 => 2
+
+        il.Emit(OpCodes.Newobj, typeof(SPF).GetConstructor(new Type[] { typeof(MethodInfo), typeof(object[]), typeof(Exception) })!);
+
+        if (typeof(Task).IsAssignableFrom(returnType))
+        {
+            il.Emit(OpCodes.Newobj, returnType.GenericTypeArguments[0].GetConstructor(new Type[] { typeof(SPF) })!);
+            il.Emit(OpCodes.Call, typeof(Task).GetRuntimeMethods().First(x => x.Name == "FromResult").MakeGenericMethod(returnType.GenericTypeArguments[0]));
+
+        }
+        else if (typeof(ValueTask).IsAssignableFrom(returnType))
+        {
+            il.Emit(OpCodes.Newobj, returnType.GenericTypeArguments[0].GetConstructor(new Type[] { typeof(SPF) })!);
+            il.Emit(OpCodes.Call, typeof(ValueTask<>).MakeGenericType(returnType.GenericTypeArguments[0]).GetConstructor(new Type[] { returnType.GenericTypeArguments[0] })!);
+        }
+        else
+        {
+            il.Emit(OpCodes.Newobj, methodinfo.ReturnType.GetConstructor(new Type[] { typeof(SPF) })!);
+        }
+        il.Emit(OpCodes.Stloc_0);
+        il.Emit(OpCodes.Leave_S, end);
+
+        il.EndExceptionBlock();
+
+        il.MarkLabel(end);
+        il.Emit(OpCodes.Ldloc_0);
+        il.Emit(OpCodes.Ret);
     }
 
     [DebuggerStepThrough]
-    public static async ValueTask<T> SuppressValueTask<T>(ValueTask<T> input)
+    public static async Task<VSP> SuppressTaskVoid<T>(Task<VSP> input)
     {
         try
         {
@@ -567,7 +418,46 @@ public static partial class NimDiscovery
         }
         catch (Exception ex)
         {
-            throw;
+            return new VSP(new SPF(ex));
+        }
+    }
+
+    [DebuggerStepThrough]
+    public static async Task<SPR<T>> SuppressTask<T>(Task<SPR<T>> input)
+    {
+        try
+        {
+            return await input;
+        }
+        catch (Exception ex)
+        {
+            return new SPR<T>(new SPF(ex));
+        }
+    }
+
+    [DebuggerStepThrough]
+    public static async ValueTask<VSP> SuppressValueTaskVoid<T>(ValueTask<VSP> input)
+    {
+        try
+        {
+            return await input;
+        }
+        catch (Exception ex)
+        {
+            return new VSP(new SPF(ex));
+        }
+    }
+
+    [DebuggerStepThrough]
+    public static async ValueTask<SPR<T>> SuppressValueTask<T>(ValueTask<SPR<T>> input)
+    {
+        try
+        {
+            return await input;
+        }
+        catch (Exception ex)
+        {
+            return new SPR<T>(new SPF(ex));
         }
     }
 

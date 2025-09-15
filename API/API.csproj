@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\EGO.Nimozyn\EGO.Nimozyn.csproj" />
     <ProjectReference Include="..\Impl\Impl.csproj" />
   </ItemGroup>
 

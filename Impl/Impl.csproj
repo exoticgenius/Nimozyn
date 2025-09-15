@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\EGO.Nimozyn\EGO.Nimozyn.csproj" />
   </ItemGroup>
 
 
