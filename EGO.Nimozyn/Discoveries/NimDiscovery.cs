@@ -3,6 +3,7 @@ using EGO.Nimozyn.Buses;
 using EGO.Nimozyn.Descriptors;
 using EGO.Nimozyn.Enums;
 using EGO.Nimozyn.Interfaces;
+using EGO.Nimozyn.Managers;
 using EGO.Nimozyn.Supervisors;
 
 using Microsoft.Extensions.DependencyInjection;
