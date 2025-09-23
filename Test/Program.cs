@@ -1,8 +1,12 @@
-﻿using Impl;
+﻿using EGO.Nimozyn.Attributes;
+using EGO.Nimozyn.Buses;
+using EGO.Nimozyn.Discoveries;
+using EGO.Nimozyn.Enums;
+
+using Impl;
 
 using Microsoft.Extensions.DependencyInjection;
 
-using Nimozyn;
 
 [assembly: NimAspectLinker<NimLogger1>(AspectPosition.Wrap)]
 [assembly: NimAspectLinker<OutputFilter>(AspectPosition.Post)]
