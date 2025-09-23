@@ -35,6 +35,10 @@ namespace Impl
             Console.WriteLine("inside");
             return x;
         }
+        public Task<int> Execute(INimHandler target, INimInput input)
+        {
+            return Task.FromResult(3000);
+        }
 
         [NimAspectLinker<OutputFilter>(AspectPosition.Post)]
         [NimAspectLinker<NimLogger1>(AspectPosition.Post)]

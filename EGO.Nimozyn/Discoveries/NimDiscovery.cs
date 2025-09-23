@@ -159,9 +159,9 @@ public static partial class NimDiscovery
         var typeName = $"{TYPE_PREFIX}{Guid.NewGuid()}_{targetMethod.DeclaringType!.Name}";
         var returnType = targetMethod.ReturnType;
 
-        if (!returnType.IsAssignableTo(typeof(Task)))
+        if (returnType.IsAssignableTo(typeof(Task)))
         {
-            returnType = typeof(Task<>).MakeGenericType(returnType);
+            returnType = returnType.GenericTypeArguments[0];
         }
 
         var typeBuilder = moduleBuilder.DefineType(
