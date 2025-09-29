@@ -26,7 +26,7 @@ app.UseHttpsRedirection();
 
 app.MapGet("/", async ([FromServices] INimBus bus) =>
 {
-    var res = await  bus.Run(new TestInput1() { Val = 1 });
+    var res = await bus.Run(new TestInput1() { Val = 1 });
 
     return res;
 });

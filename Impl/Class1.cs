@@ -35,6 +35,11 @@ namespace Impl
             Console.WriteLine("inside");
             return x;
         }
+        public async Task TestMethod3(TestInput3 req)
+        {
+            await Task.Delay(1000);
+            Console.WriteLine("inside");
+        }
         public Task<int> Execute(INimHandler target, INimInput input)
         {
             return Task.FromResult(3000);
@@ -53,6 +58,10 @@ namespace Impl
         public int Val { get; set; }
     }
 
+    public class TestInput3 : INimInput
+    {
+        public int Val { get; set; }
+    }
     public class TestInput2 : INimInput<string>
     {
         public string Val { get; set; }
