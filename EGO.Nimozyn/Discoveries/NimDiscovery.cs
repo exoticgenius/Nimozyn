@@ -37,6 +37,11 @@ public static partial class NimDiscovery
 
     public static ImmutableList<ExpandedHandler> ScanNimHandlersAsync(this IServiceCollection collection)
     {
+        Assembly.GetCallingAssembly()
+            .GetReferencedAssemblies()
+            .ToList()
+            .ForEach(x => AppDomain.CurrentDomain.Load(x));
+
         collection.TryAddSingleton<INimRootSupervisor, NimRootSupervisor>();
         collection.TryAddScoped<INimScopeSupervisor, NimScopeSupervisor>();
 
