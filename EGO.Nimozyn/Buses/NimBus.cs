@@ -53,7 +53,7 @@ internal sealed class NimBus : INimBus
     //}
 
     [DebuggerStepThrough]
-    public Task<T> Run<T>(INimInput<T> input)
+    public Task<T> RunAsync<T>(INimInput<T> input)
     {
         PrepareData(input, out var handler, out var service);
 
@@ -61,7 +61,7 @@ internal sealed class NimBus : INimBus
     }
 
     [DebuggerStepThrough]
-    public Task Run(INimInput input)
+    public Task RunAsync(INimInput input)
     {
         PrepareData(input, out var handler, out var service);
 

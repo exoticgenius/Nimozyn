@@ -4,7 +4,7 @@ namespace EGO.Nimozyn.Buses;
 
 public interface INimBus
 {
-    Task Run(INimInput input);
-    //T Run<T>(INimInput input);
-    Task<T> Run<T>(INimInput<T> input);
+    Task RunAsync(INimInput input);
+
+    Task<T> RunAsync<T>(INimInput<T> input);
 }

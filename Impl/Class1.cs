@@ -31,7 +31,7 @@ namespace Impl
         public async Task<int> TestMethod1(TestInput1 req)
         {
             await Task.Yield();
-            var res = bus.Run(new TestInput2 { Val = "Hello" });
+            var res = bus.RunAsync(new TestInput2 { Val = "Hello" });
             Console.WriteLine("inside");
             return x;
         }
