@@ -35,12 +35,24 @@ public static partial class NimDiscovery
         ModuleBuilders = new();
     }
 
-    public static ImmutableList<ExpandedHandler> ScanNimHandlersAsync(this IServiceCollection collection)
+    public static async Task<ImmutableList<ExpandedHandler>> ScanNimHandlersAsync(this IServiceCollection collection)
     {
-        Assembly.GetCallingAssembly()
+        return await ScanNimHandlersAsync(collection, Assembly.GetCallingAssembly());
+    }
+
+    public static async Task<ImmutableList<ExpandedHandler>> ScanNimHandlersAsync(this IServiceCollection collection, Assembly entryAsm)
+    {
+        var currentAsms = AppDomain.CurrentDomain.GetAssemblies().Select(x => x.GetName()).ToArray();
+        entryAsm
             .GetReferencedAssemblies()
             .ToList()
-            .ForEach(x => AppDomain.CurrentDomain.Load(x));
+            .ForEach(x => { if (!currentAsms.Contains(x)) AppDomain.CurrentDomain.Load(x); });
+
+        return await ScanNimHandlersAsync(collection, AppDomain.CurrentDomain.GetAssemblies());
+    }
+
+    public static async Task<ImmutableList<ExpandedHandler>> ScanNimHandlersAsync(this IServiceCollection collection, Assembly[] assemblies)
+    {
 
         collection.TryAddSingleton<INimRootSupervisor, NimRootSupervisor>();
         collection.TryAddScoped<INimScopeSupervisor, NimScopeSupervisor>();
@@ -49,12 +61,12 @@ public static partial class NimDiscovery
             throw new InvalidProgramException("handlers must not be registered as services before scan");
 
         var hType = typeof(INimHandler);
-        var allHandlers = AppDomain.CurrentDomain.GetAssemblies()
+        var allHandlers = assemblies
             .SelectMany(x => x.GetTypes())
             .Where(x => x.IsAssignableTo(hType) && !x.IsInterface && x is not null)
             .Select(ExpandByMethods)
             .ToImmutableList();
-        
+
         foreach (var handler in allHandlers)
         {
             collection.Add(ServiceDescriptor.Describe(
@@ -106,7 +118,7 @@ public static partial class NimDiscovery
                     Lifetime = defaultLifetime = GetLifetime(methodLifeTimes, defaultLifetime),
                     CompatibilityMode = GetCompatibilityMode(methodLifeTimes, defaultCompMode),
                     LauncherType = launcherType,
-                    LauncherInstance =(ILLauncher) launcherInstance,
+                    LauncherInstance = (ILLauncher)launcherInstance,
                 };
             })
             .ToImmutableList();
@@ -184,7 +196,7 @@ public static partial class NimDiscovery
 
     private static void GenerateLauncherMethod(MethodInfo targetMethod, TypeBuilder typeBuilder)
     {
-        
+
         Type[] inputType = [typeof(INimHandler), typeof(INimInput)];
         var returnType = targetMethod.ReturnType;
 
@@ -213,13 +225,13 @@ public static partial class NimDiscovery
         //il.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", [typeof(string)]));
         il.Emit(OpCodes.Callvirt, targetMethod);
 
-        if(!targetMethod.ReturnType.IsAssignableTo(typeof(Task)))
+        if (!targetMethod.ReturnType.IsAssignableTo(typeof(Task)))
         {
             il.Emit(OpCodes.Call, typeof(Task).GetMethod(nameof(Task.FromResult))!
                 .MakeGenericMethod(targetMethod.ReturnType));
             //return;
         }
-        
+
         il.Emit(OpCodes.Ret);
 
     }
