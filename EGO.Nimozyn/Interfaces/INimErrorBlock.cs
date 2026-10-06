@@ -2,5 +2,5 @@
 
 public interface INimErrorBlock : INimBlock
 {
-    Task Execute(Exception e, object[] @params);
+    Task Execute(Exception e, CancellationToken ct, object[] @params);
 }

@@ -26,7 +26,7 @@ internal sealed class NimBus : INimBus
     {
         PrepareData(input, out var handler, out var service);
 
-        return ((ILLauncher<INimInput, Task<T>>)handler.LauncherInstance).Execute(service, input);
+        return ((ILLauncher<INimInput, Task<T>>)handler.LauncherInstance).Execute(service, input, ct);
     }
 
     [DebuggerStepThrough]
@@ -34,7 +34,7 @@ internal sealed class NimBus : INimBus
     {
         PrepareData(input, out var handler, out var service);
 
-        return ((ILLauncher<INimInput, Task>)handler.LauncherInstance).Execute(service, input);
+        return ((ILLauncher<INimInput, Task>)handler.LauncherInstance).Execute(service, input, ct);
     }
     [DebuggerStepThrough]
     private void PrepareData(INimInput input, out ExpandedHandlerMethod handler, out INimHandler service)

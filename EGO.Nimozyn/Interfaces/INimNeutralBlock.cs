@@ -2,5 +2,5 @@
 
 public interface INimNeutralBlock : INimBlock
 {
-    Task Execute();
+    Task Execute(CancellationToken ct);
 }
