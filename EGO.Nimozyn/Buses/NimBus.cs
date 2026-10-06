@@ -22,22 +22,22 @@ internal sealed class NimBus : INimBus
     }
 
     [DebuggerStepThrough]
-    public Task<T> Run<T>(INimInput<T> input, CancellationToken ct)
+    public Task<T> RunAsync<T>(INimInput<T> input, CancellationToken ct)
     {
-        PrepareData(input, ct, out var handler, out var service);
+        PrepareData(input, out var handler, out var service);
 
-        return ((ILLauncher<INimInput, Task<T>>)handler.LauncherInstance).Execute(service, input, ct);
+        return ((ILLauncher<INimInput, Task<T>>)handler.LauncherInstance).Execute(service, input);
     }
 
     [DebuggerStepThrough]
-    public Task Run(INimInput input, CancellationToken ct)
+    public Task RunAsync(INimInput input, CancellationToken ct)
     {
-        PrepareData(input, ct, out var handler, out var service);
+        PrepareData(input, out var handler, out var service);
 
-        return ((ILLauncher<INimInput, Task>)handler.LauncherInstance).Execute(service, input, ct);
+        return ((ILLauncher<INimInput, Task>)handler.LauncherInstance).Execute(service, input);
     }
     [DebuggerStepThrough]
-    private void PrepareData(INimInput input, CancellationToken ct, out ExpandedHandlerMethod handler, out INimHandler service)
+    private void PrepareData(INimInput input, out ExpandedHandlerMethod handler, out INimHandler service)
     {
         handler = manager.GetHandlerMethod(input.GetType()) ??
             throw new NoNullAllowedException(); ;
