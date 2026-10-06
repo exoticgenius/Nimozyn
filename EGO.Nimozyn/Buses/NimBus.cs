@@ -21,54 +21,23 @@ internal sealed class NimBus : INimBus
         this.manager = manager;
     }
 
-    //[DebuggerStepThrough]
-    //public void Run(INimInput input)
-    //{
-    //    var handler = manager.GetHandlerMethod(input.GetType());
-
-    //    if (handler is null)
-    //        throw new InvalidOperationException($"No handler found for input type {input.GetType().Name}");
-
-    //    var service = serviceProvider.GetRequiredService(handler?.HandlerWrapper?.ServiceType ?? throw new InvalidOperationException("No handler found for input type"));
-
-    //    _ = handler.handlerMethod.Invoke(service, [input]);
-    //}
-
-    //[DebuggerStepThrough]
-    //public T Run<T>(INimInput input)
-    //{
-    //    var handler = manager.GetHandlerMethod(input.GetType());
-
-    //    if (handler is null)
-    //        throw new InvalidOperationException($"No handler found for input type {input.GetType().Name}");
-
-    //    if (handler.handlerMethod.ReturnType != typeof(T) && handler.handlerMethod.ReturnType != typeof(Task<T>))
-    //        throw new InvalidOperationException($"Handler method {handler.handlerMethod.Name} does not return type {typeof(T).Name}");
-
-    //    var service = serviceProvider.GetRequiredService(handler?.HandlerWrapper?.ServiceType ?? throw new InvalidOperationException("No handler found for input type"));
-
-    //    var res = handler.handlerMethod.Invoke(service, [input]);
-
-    //    return (T)res;
-    //}
-
     [DebuggerStepThrough]
-    public Task<T> Run<T>(INimInput<T> input)
+    public Task<T> Run<T>(INimInput<T> input, CancellationToken ct)
     {
-        PrepareData(input, out var handler, out var service);
+        PrepareData(input, ct, out var handler, out var service);
 
-        return ((ILLauncher<INimInput, Task<T>>)handler.LauncherInstance).Execute(service, input);
+        return ((ILLauncher<INimInput, Task<T>>)handler.LauncherInstance).Execute(service, input, ct);
     }
 
     [DebuggerStepThrough]
-    public Task Run(INimInput input)
+    public Task Run(INimInput input, CancellationToken ct)
     {
-        PrepareData(input, out var handler, out var service);
+        PrepareData(input, ct, out var handler, out var service);
 
-        return ((ILLauncher<INimInput, Task>)handler.LauncherInstance).Execute(service, input);
+        return ((ILLauncher<INimInput, Task>)handler.LauncherInstance).Execute(service, input, ct);
     }
     [DebuggerStepThrough]
-    private void PrepareData(INimInput input, out ExpandedHandlerMethod handler, out INimHandler service)
+    private void PrepareData(INimInput input, CancellationToken ct, out ExpandedHandlerMethod handler, out INimHandler service)
     {
         handler = manager.GetHandlerMethod(input.GetType()) ??
             throw new NoNullAllowedException(); ;

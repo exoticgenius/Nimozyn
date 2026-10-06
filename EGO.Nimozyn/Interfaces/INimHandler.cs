@@ -3,5 +3,5 @@
 public interface INimHandler;
 public interface INimHandler<T, R> : INimHandler where T : INimInput<R>
 {
-    Task<R> Handle(T input);
+    Task<R> Handle(T input, CancellationToken ct);
 }
